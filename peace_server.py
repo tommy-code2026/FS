@@ -15,6 +15,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
+DEFAULT_ALLOWED_ORIGINS = {
+    "https://tommy-code2026.github.io",
+    "http://localhost:8765",
+    "http://127.0.0.1:8765",
+}
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
@@ -56,7 +61,12 @@ class YahooClient:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookies)
         )
-        self.crumb = self._get_crumb()
+        self.crumb = None
+
+    def _ensure_crumb(self):
+        if self.crumb is None:
+            self.crumb = self._get_crumb()
+        return self.crumb
 
     def _open(self, url):
         request = urllib.request.Request(
@@ -93,7 +103,7 @@ class YahooClient:
 
     def quote_summary(self, symbol):
         query = urllib.parse.urlencode(
-            {"modules": SUMMARY_MODULES, "crumb": self.crumb}
+            {"modules": SUMMARY_MODULES, "crumb": self._ensure_crumb()}
         )
         path_symbol = urllib.parse.quote(symbol, safe="^.-=")
         payload = self.json(
@@ -116,7 +126,7 @@ class YahooClient:
                 "type": ",".join(ANNUAL_SERIES),
                 "period1": now - 15 * 365 * 24 * 60 * 60,
                 "period2": now,
-                "crumb": self.crumb,
+                "crumb": self._ensure_crumb(),
             }
         )
         path_symbol = urllib.parse.quote(symbol, safe="^.-=")
@@ -143,6 +153,141 @@ class YahooClient:
                 if year and value is not None:
                     rows.setdefault(year, {"year": year})[field] = value
         return rows
+
+
+class FMPClient:
+    def __init__(self, api_key):
+        self.api_key = api_key
+
+    def get(self, endpoint, **params):
+        params["apikey"] = self.api_key
+        url = (
+            "https://financialmodelingprep.com/api/v3/"
+            + endpoint
+            + "?"
+            + urllib.parse.urlencode(params)
+        )
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if isinstance(payload, dict) and (
+            payload.get("Error Message") or payload.get("error")
+        ):
+            raise RuntimeError(
+                payload.get("Error Message") or payload.get("error")
+            )
+        return payload
+
+    def stock_data(self, symbol):
+        encoded_symbol = urllib.parse.quote(symbol, safe="^.-=")
+        profile = self.get("profile/" + encoded_symbol)
+        quote = self.get("quote/" + encoded_symbol)
+        if not profile or not quote:
+            raise RuntimeError("FMP 找不到此股票代號，或此 API key 無權存取該資料。")
+
+        profile = profile[0]
+        quote = quote[0]
+        ratios = self.get("ratios/" + encoded_symbol, limit=1)
+        key_metrics = self.get("key-metrics/" + encoded_symbol, limit=1)
+        income = self.get("income-statement/" + encoded_symbol, limit=5)
+        cashflow = self.get("cash-flow-statement/" + encoded_symbol, limit=5)
+        balance = self.get("balance-sheet-statement/" + encoded_symbol, limit=5)
+
+        ratio = ratios[0] if ratios else {}
+        key_metric = key_metrics[0] if key_metrics else {}
+        series_by_year = {}
+        mappings = (
+            (income, {
+                "revenue": "totalRevenue",
+                "grossProfit": "grossProfit",
+                "operatingIncome": "operatingIncome",
+                "netIncome": "netIncome",
+                "epsdiluted": "dilutedEPS",
+                "eps": "basicEPS",
+                "interestExpense": "interestExpense",
+            }),
+            (cashflow, {
+                "operatingCashFlow": "operatingCashFlow",
+                "freeCashFlow": "freeCashFlow",
+                "netCashUsedForInvestingActivites": "investingCashFlow",
+                "netCashUsedForInvestingActivities": "investingCashFlow",
+                "netCashProvidedByInvestingActivities": "investingCashFlow",
+                "netCashUsedProvidedByFinancingActivities": "financingCashFlow",
+                "netCashProvidedByFinancingActivities": "financingCashFlow",
+            }),
+            (balance, {
+                "totalAssets": "totalAssets",
+                "longTermDebt": "longTermDebt",
+                "totalCurrentAssets": "totalCurrentAssets",
+                "totalCurrentLiabilities": "totalCurrentLiabilities",
+                "totalStockholdersEquity": "stockholdersEquity",
+                "totalDebt": "totalDebt",
+            }),
+        )
+        for statements, fields in mappings:
+            for statement in statements or []:
+                year = str(statement.get("date", ""))[:4]
+                if not year:
+                    continue
+                annual = series_by_year.setdefault(year, {"year": year})
+                for source_field, target_field in fields.items():
+                    value = statement.get(source_field)
+                    if value is not None:
+                        annual[target_field] = value
+
+        history = self.get(
+            "historical-price-full/" + encoded_symbol,
+            serietype="line",
+        )
+        prices = (history.get("historical") or []) if isinstance(history, dict) else []
+        chart_history = [
+            (int(time.mktime(time.strptime(item["date"], "%Y-%m-%d"))), item["close"])
+            for item in prices
+            if item.get("date") and isinstance(item.get("close"), (int, float))
+        ]
+        chart_history.sort()
+        closes = [close for _, close in chart_history]
+        currency = profile.get("currency") or quote.get("currency") or "USD"
+
+        summary = {
+            "price": {
+                "longName": profile.get("companyName") or quote.get("name") or symbol,
+                "currency": currency,
+                "regularMarketPrice": quote.get("price"),
+                "marketCap": quote.get("marketCap"),
+            },
+            "summaryProfile": {
+                "longBusinessSummary": profile.get("description") or "",
+            },
+            "summaryDetail": {
+                "trailingPE": quote.get("pe") or ratio.get("priceEarningsRatio"),
+                "forwardPE": key_metric.get("forwardPE"),
+            },
+            "defaultKeyStatistics": {
+                "pegRatio": ratio.get("priceEarningsToGrowthRatio"),
+                "trailingEps": quote.get("eps"),
+            },
+            "financialData": {
+                "totalDebt": quote.get("totalDebt"),
+                "debtToEquity": (
+                    ratio["debtEquityRatio"] * 100
+                    if ratio.get("debtEquityRatio") is not None
+                    else None
+                ),
+                "currentRatio": ratio.get("currentRatio"),
+                "returnOnEquity": ratio.get("returnOnEquity"),
+            },
+        }
+        chart = {
+            "price": quote.get("price") or (closes[-1] if closes else None),
+            "rsi": rsi(closes[-251:]) if len(closes) > 15 else None,
+            "ma10": sum(closes[-10:]) / 10 if len(closes) >= 10 else None,
+            "closes": closes,
+        }
+        return summary, series_by_year, chart
 
 
 def raw_value(value):
@@ -479,19 +624,37 @@ class PeaceHandler(SimpleHTTPRequestHandler):
 
         try:
             yahoo = YahooClient()
-            summary = yahoo.quote_summary(symbol)
-            time_series = yahoo.annual_time_series(symbol)
             errors = {}
+            try:
+                summary = yahoo.quote_summary(symbol)
+                time_series = yahoo.annual_time_series(symbol)
+                stock_chart = latest_chart(yahoo, symbol)
+                data_source = "Yahoo Finance"
+            except Exception as yahoo_error:
+                api_key = os.environ.get("FMP_API_KEY", "").strip()
+                if not api_key:
+                    raise RuntimeError(
+                        "Yahoo Finance 暫時拒絕此服務的資料請求"
+                        f"（{yahoo_error}）。請在 Render 的 Environment 設定 "
+                        "FMP_API_KEY 作為備援資料來源；請勿把金鑰寫入前端或 GitHub。"
+                    ) from yahoo_error
+                try:
+                    summary, time_series, stock_chart = FMPClient(api_key).stock_data(symbol)
+                    data_source = "Financial Modeling Prep"
+                except Exception as fmp_error:
+                    raise RuntimeError(
+                        "Yahoo Finance 無法提供資料"
+                        f"（{yahoo_error}）；FMP 備援也失敗（{fmp_error}）。"
+                    ) from fmp_error
+
             with ThreadPoolExecutor(max_workers=5) as pool:
-                stock_future = pool.submit(latest_chart, yahoo, symbol)
                 futures = {
-                    "vix": pool.submit(latest_chart, yahoo, "^VIX"),
-                    "vxn": pool.submit(latest_chart, yahoo, "^VXN"),
-                    "semi_volatility": pool.submit(semi_volatility, yahoo),
+                    "vix": pool.submit(latest_chart, YahooClient(), "^VIX"),
+                    "vxn": pool.submit(latest_chart, YahooClient(), "^VXN"),
+                    "semi_volatility": pool.submit(semi_volatility, YahooClient()),
                     "fear_greed": pool.submit(fear_greed),
                     "sp500_pe": pool.submit(sp500_pe),
                 }
-                stock_chart = stock_future.result()
                 markets = {}
                 for key, future in futures.items():
                     try:
@@ -503,9 +666,20 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                         markets[key] = None
                         errors[key] = str(error)
             data = prepare_stock(symbol, summary, stock_chart, markets, errors, time_series)
+            data["dataSource"] = data_source
+            if data_source != "Yahoo Finance":
+                data["providerNotice"] = (
+                    f"Yahoo Finance 暫時不可用，已改用 {data_source}。"
+                )
             self.send_json(200, data)
         except Exception as error:
             self.send_json(502, {"error": str(error)})
+
+    def allowed_origins(self):
+        configured = os.environ.get("ALLOWED_ORIGINS")
+        if configured is None:
+            return DEFAULT_ALLOWED_ORIGINS
+        return {origin.strip() for origin in configured.split(",") if origin.strip()}
 
     def send_json(self, status, data):
         content = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -513,6 +687,11 @@ class PeaceHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
+        origin = self.headers.get("Origin")
+        if urllib.parse.urlparse(self.path).path == "/api/stock":
+            self.send_header("Vary", "Origin")
+            if origin in self.allowed_origins():
+                self.send_header("Access-Control-Allow-Origin", origin)
         self.end_headers()
         self.wfile.write(content)
 

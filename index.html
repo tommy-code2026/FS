@@ -154,6 +154,9 @@
     </div>
     <script>
         const byId = (id) => document.getElementById(id);
+        const API_BASE_URL = window.location.hostname.endsWith(".github.io")
+            ? "https://peace-stock-analyzer.onrender.com"
+            : "";
         const number = (value, digits = 2) =>
             value === null || value === undefined || !Number.isFinite(Number(value))
                 ? "尚無資料"
@@ -349,10 +352,14 @@
             renderCriteria(data);
             renderAnnual(data);
             const warnings = Object.entries(data.errors || {});
-            byId("warnings").hidden = warnings.length === 0;
-            byId("warnings").textContent = warnings.length
-                ? `部分外部資料無法取得：${warnings.map(([source, message]) => `${source}：${message}`).join("；")}`
-                : "";
+            const notices = [
+                data.providerNotice,
+                warnings.length
+                    ? `部分外部資料無法取得：${warnings.map(([source, message]) => `${source}：${message}`).join("；")}`
+                    : ""
+            ].filter(Boolean);
+            byId("warnings").hidden = notices.length === 0;
+            byId("warnings").textContent = notices.join(" ");
         }
 
         async function updateData(event) {
@@ -364,15 +371,20 @@
             byId("status").textContent = `正在抓取 ${ticker} 的資料…`;
             byId("warnings").hidden = true;
             try {
-                const response = await fetch(`/api/stock?symbol=${encodeURIComponent(ticker)}`);
+                const response = await fetch(`${API_BASE_URL}/api/stock?symbol=${encodeURIComponent(ticker)}`);
+                if (!response.headers.get("content-type")?.includes("application/json")) {
+                    throw new Error(
+                        `資料服務回傳非 JSON（HTTP ${response.status}）。請確認 GitHub Pages 已更新至最新 index.html，且 API 網址指向 Render。`
+                    );
+                }
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || `資料服務錯誤（${response.status}）`);
                 render(data);
                 byId("status").textContent =
-                    `資料已更新：${data.symbol}。數據來源可能延遲，請以官方資訊為準。`;
+                    `資料已更新：${data.symbol}（來源：${data.dataSource || "Yahoo Finance"}）。數據來源可能延遲，請以官方資訊為準。`;
             } catch (error) {
                 byId("status").textContent =
-                    `抓取失敗：${error.message}。請確認伺服器已啟動，並檢查網路連線或股票代號。`;
+                    `抓取失敗：${error.message}`;
             } finally {
                 button.disabled = false;
             }
