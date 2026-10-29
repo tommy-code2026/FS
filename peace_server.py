@@ -465,8 +465,8 @@ class PeaceHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in ("/", "/peace.html"):
-            self.path = "/peace.html"
+        if parsed.path in ("/", "/index.html", "/peace.html"):
+            self.path = "/index.html"
             return super().do_GET()
         if parsed.path == "/healthz":
             return self.send_json(200, {"status": "ok"})
