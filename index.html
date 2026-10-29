@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEACE 股票品質分析(加強版)</title>
+    <style>
+        :root {
+            --bg-color: #0e1117;
+            --text-color: #fafafa;
+            --sidebar-bg: #262730;
+            --card-bg: #1e1e1e;
+            --border-color: #333;
+            --accent-color: #ff4b4b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            padding: 2rem 1.5rem;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .sidebar input {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: var(--bg-color);
+            color: white;
+            margin-top: 10px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .main {
+            flex: 1;
+            padding: 2rem 3rem;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        .grid-6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; }
+        .metric-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .metric-card h4 { margin: 0; color: #aaa; font-size: 0.9rem; font-weight: normal; }
+        .metric-card h2 { margin: 8px 0 0 0; font-size: 1.6rem; font-weight: 600;}
+        .metric-card p { margin: 8px 0 0 0; font-size: 0.8rem; color: #00c07f; }
+        .metric-card p.red { color: #ff4b4b; }
+        hr { border: 0; border-top: 1px solid var(--border-color); margin: 2rem 0; }
+        .success-box {
+            background-color: rgba(0, 200, 100, 0.1);
+            border: 1px solid #00c07f;
+            padding: 1rem;
+            border-radius: 8px;
+            color: #00c07f;
+        }
+        .btn {
+            background-color: var(--sidebar-bg);
+            border: 1px solid #555;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .checklist p { margin: 8px 0; line-height: 1.4;}
+        .section-title { color:#aaa; margin-top:1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem;}
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>🔍 股票搜尋</h2>
+        <form id="search-form">
+            <label for="ticker">輸入代號（例：NVDA、2330.TW）</label>
+            <input type="text" id="ticker" value="NVDA" autocomplete="off" required>
+            <button class="btn" type="submit" style="margin-top: 10px; width: 100%;">抓取資料</button>
+        </form>
+        <p style="font-size: 0.85rem; color: #888; margin-top: 20px;">🌙 <i>夜間模式為預設</i></p>
+        <p style="font-size: 0.85rem; color: #aaa;">先雙擊「啟動PEACE.bat」，再輸入股票代號即可抓取資料。</p>
+    </div>
+    <div class="main">
+        <h1>PEACE 股票品質分析(加強版)</h1>
+        <div id="company-info">
+            <h2 style="margin-bottom:0; font-size: 2rem;" id="c-name">輸入股票代號以載入資料</h2>
+            <h3 style="margin-top:5px; color:#aaa; font-weight: normal;" id="c-price">—</h3>
+            <p style="color:#ddd; line-height: 1.6; font-size: 1rem;" id="c-desc"></p>
+        </div>
+        <p id="status" role="status" aria-live="polite">資料透過 Yahoo Finance 等參考來源抓取；請使用網站網址或先啟動本機服務。直接開啟 HTML 檔無法啟動資料服務。</p>
+        <div id="warnings" class="success-box" hidden></div>
+        
+        <hr>
+        
+        <h3>📊 估值指標</h3>
+        <div class="grid-6">
+            <div class="metric-card"><h4>S&amp;P 500 PE</h4><h2 id="m-sp500-pe">—</h2></div>
+            <div class="metric-card"><h4>目前 PE</h4><h2 id="m-pe">—</h2></div>
+            <div class="metric-card"><h4>Forward PE</h4><h2 id="m-forward-pe">—</h2></div>
+            <div class="metric-card"><h4>目前 PEG</h4><h2 id="m-peg">—</h2></div>
+            <div class="metric-card"><h4>市值</h4><h2 id="m-market-cap">—</h2></div>
+            <div class="metric-card"><h4>Trailing EPS</h4><h2 id="m-eps-ttm">—</h2></div>
+        </div>
+
+        <hr>
+
+        <h3>🌊 市場情緒與波動(VIX)</h3>
+        <div class="grid-4">
+            <div class="metric-card"><h4>Fear &amp; Greed</h4><h2 id="m-fear-greed">—</h2><p id="m-fear-rating"></p></div>
+            <div class="metric-card"><h4>S&amp;P 500 VIX</h4><h2 id="m-vix">—</h2><p>^VIX 指數</p></div>
+            <div class="metric-card"><h4>Nasdaq VIX</h4><h2 id="m-vxn">—</h2><p>^VXN 指數</p></div>
+            <div class="metric-card"><h4>半導體波動率（估算）</h4><h2 id="m-semi-vol">—</h2><p>SOXX 近 30 日年化波動率</p></div>
+        </div>
+
+        <hr>
+
+        <h3>📈 技術指標</h3>
+        <div class="success-box" id="trend-note">等待行情資料。</div>
+        <p style="margin-top: 1rem; color: #ddd;"><strong>RSI(14):</strong> <span id="m-rsi">—</span> | <strong>Price:</strong> <span id="m-chart-price">—</span> | <strong>10MA:</strong> <span id="m-ma10">—</span></p>
+
+        <hr>
+
+        <h3 id="score-heading">PEACE 評估</h3>
+        <p id="score-note">評估結果將依抓取到的財報計算；資料不足的項目會明確標示。</p>
+        <div id="criteria" class="grid-2 checklist"></div>
+
+        <hr>
+        <h3>📋 年度財報（Yahoo Finance）</h3>
+        <div style="overflow-x:auto;">
+            <table id="annual-table" style="width:100%; border-collapse:collapse; text-align:right;">
+                <thead><tr>
+                    <th style="text-align:left;">年度</th><th>營收</th><th>毛利</th>
+                    <th>營業利益</th><th>淨利</th><th>EPS</th>
+                    <th>營運現金流</th><th>自由現金流</th>
+                </tr></thead>
+                <tbody id="annual-body"></tbody>
+            </table>
+        </div>
+
+        <hr>
+        <button class="btn" onclick="window.print()">📥 匯出報告 (生成HTML 報表，建議列印為PDF)</button>
+    </div>
+    <script>
+        const byId = (id) => document.getElementById(id);
+        const number = (value, digits = 2) =>
+            value === null || value === undefined || !Number.isFinite(Number(value))
+                ? "尚無資料"
+                : Number(value).toLocaleString("zh-TW", {
+                    minimumFractionDigits: digits,
+                    maximumFractionDigits: digits
+                });
+        const ratio = (value) => value === null || value === undefined
+            ? "尚無資料"
+            : `${number(value * 100, 1)}%`;
+        const multiple = (value) => value === null || value === undefined
+            ? "尚無資料"
+            : `${number(value)}x`;
+        const money = (value, currency) => value === null || value === undefined
+            ? "尚無資料"
+            : `${currency} ${number(value)}`;
+        const compactMoney = (value) => {
+            if (value === null || value === undefined) return "尚無資料";
+            const abs = Math.abs(value);
+            const unit = abs >= 1e12 ? "T" : abs >= 1e9 ? "B" : abs >= 1e6 ? "M" : "";
+            const divisor = unit === "T" ? 1e12 : unit === "B" ? 1e9 : unit === "M" ? 1e6 : 1;
+            return `${number(value / divisor)}${unit}`;
+        };
+        const assessChecks = (data) => {
+            const rows = data.annual || [];
+            const metric = data.metrics || {};
+            const yearsOf = (key) => rows.slice(0, 5).map((row) =>
+                key === "dilutedEPS" ? row.dilutedEPS ?? row.basicEPS : row[key]
+            ).reverse();
+            const fiveYears = (key, predicate) => {
+                const values = yearsOf(key);
+                return values.length < 5 || values.some((value) => value === null || value === undefined)
+                    ? null
+                    : predicate(values);
+            };
+            const nonDecliningAndPositive = (values) =>
+                values.every((value) => value > 0) &&
+                values.every((value, index) => index === 0 || value >= values[index - 1]);
+            const positiveGrowth = (values) => values[0] > 0 && values.at(-1) > values[0];
+            const cashQualityCheck = () => {
+                if (rows.length < 5) return null;
+                const values = rows.slice(0, 5).map((row) =>
+                    row.operatingCashFlow !== undefined && row.netIncome
+                        ? row.operatingCashFlow / row.netIncome
+                        : null
+                );
+                return values.some((value) => value === null) ? null : values.every((value) => value > 0.8);
+            };
+            const cashFlowCheck = () => {
+                if (rows.length < 5) return null;
+                const values = rows.slice(0, 5);
+                if (values.some((row) => row.operatingCashFlow === undefined ||
+                    row.investingCashFlow === undefined || row.financingCashFlow === undefined)) return null;
+                return values.every((row) =>
+                    row.operatingCashFlow > Math.abs(row.investingCashFlow) &&
+                    row.operatingCashFlow > Math.abs(row.financingCashFlow)
+                );
+            };
+            const latest = rows[0] || {};
+            const combinedDebtCheck = metric.debtEquity == null || metric.interestCoverage == null
+                ? null
+                : metric.debtEquity < 0.5 && metric.interestCoverage > 3;
+            const checks = [
+                ["獲利（P）", "1. 5年營收皆為正且不衰退", fiveYears("totalRevenue", nonDecliningAndPositive), "—"],
+                ["獲利（P）", "2. 5年毛利皆為正且不衰退", fiveYears("grossProfit", nonDecliningAndPositive), "—"],
+                ["獲利（P）", "3. 5年營業利益皆為正且不衰退", fiveYears("operatingIncome", nonDecliningAndPositive), "—"],
+                ["獲利（P）", "4. 5年 EPS 皆為正且不衰退", fiveYears("dilutedEPS", nonDecliningAndPositive), "—"],
+                ["成長（E）", "5. 5年營收正成長", fiveYears("totalRevenue", positiveGrowth), "—"],
+                ["成長（E）", "6. 5年營業利益正成長", fiveYears("operatingIncome", positiveGrowth), "—"],
+                ["成長（E）", "7. 5年 EPS 正成長", fiveYears("dilutedEPS", positiveGrowth), "—"],
+                ["現金（A）", "8. 營運及自由現金流持續增加且皆為正",
+                    fiveYears("operatingCashFlow", positiveGrowth) === true &&
+                    fiveYears("freeCashFlow", positiveGrowth) === true ? true :
+                    fiveYears("operatingCashFlow", positiveGrowth) === null ||
+                    fiveYears("freeCashFlow", positiveGrowth) === null ? null : false, "—"],
+                ["現金（A）", "9. 5年營運現金流皆高於投資及融資現金流", cashFlowCheck(), "—"],
+                ["現金（A）", "10. 5年營運現金流／淨利皆大於 0.8", cashQualityCheck(),
+                    `最新年度 ${number(latest.operatingCashFlow && latest.netIncome
+                        ? latest.operatingCashFlow / latest.netIncome : null)}`],
+                ["保守（C）", "11. 負債權益比 < 0.5 且利息保障倍數 > 3", combinedDebtCheck,
+                    `D/E ${number(metric.debtEquity)}；利息保障 ${multiple(metric.interestCoverage)}`],
+                ["保守（C）", "12. 流動比率 > 1", metric.currentRatio == null ? null : metric.currentRatio > 1,
+                    `CR ${number(metric.currentRatio)}`],
+                ["保守（C）", "13. 長期負債／淨利 < 4",
+                    metric.longDebtNetIncome == null ? null : metric.longDebtNetIncome < 4,
+                    number(metric.longDebtNetIncome)],
+                ["效率（E）", "14. 平均 ROE > 15%",
+                    metric.averageROE == null ? null : metric.averageROE > 0.15, ratio(metric.averageROE)],
+                ["效率（E）", "15. 總資產週轉率 > 0.7",
+                    metric.assetTurnover == null ? null : metric.assetTurnover > 0.7, number(metric.assetTurnover)],
+                ["效率（E）", "16. ROIC > WACC",
+                    metric.roic == null || metric.wacc == null ? null : metric.roic > metric.wacc,
+                    `ROIC ${ratio(metric.roic)} / WACC ${ratio(metric.wacc)}`],
+                ["加分", "17. GP/A ≥ 0.33",
+                    metric.gpAssets == null ? null : metric.gpAssets >= 0.33, ratio(metric.gpAssets)],
+                ["加分", "18. FCF Margin > 15%",
+                    metric.fcfMargin == null ? null : metric.fcfMargin > 0.15, ratio(metric.fcfMargin)]
+            ];
+            return checks.map(([group, label, passed, evidence], index) =>
+                ({ group, label, passed, evidence, index })
+            );
+        };
+
+        function renderCriteria(data) {
+            const results = assessChecks(data);
+            const base = results.slice(0, 16);
+            const bonus = results.slice(16);
+            const passed = base.filter((item) => item.passed === true).length;
+            const known = base.filter((item) => item.passed !== null).length;
+            const bonusPassed = bonus.filter((item) => item.passed === true).length;
+            byId("score-heading").textContent = `PEACE 評估：${passed} / 16（加分 ${bonusPassed} / 2）`;
+            byId("score-note").textContent =
+                `基本項目已判定 ${known} / 16；5年條件以 Yahoo Finance 可取得的年度資料計算，資料不足或來源未提供的項目不會猜測。`;
+            const container = byId("criteria");
+            container.replaceChildren();
+            ["獲利（P）", "成長（E）", "現金（A）", "保守（C）", "效率（E）", "加分"].forEach((group) => {
+                const section = document.createElement("section");
+                const heading = document.createElement("h4");
+                heading.className = "section-title";
+                heading.textContent = group;
+                section.appendChild(heading);
+                results.filter((item) => item.group === group).forEach((item) => {
+                    const line = document.createElement("p");
+                    const icon = item.passed === true ? "✔️" : item.passed === false ? "❌" : "⚪";
+                    line.textContent = `${icon} ${item.label}${item.evidence === "—" ? "" : `（${item.evidence}）`}`;
+                    section.appendChild(line);
+                });
+                container.appendChild(section);
+            });
+        }
+
+        function renderAnnual(data) {
+            const body = byId("annual-body");
+            body.replaceChildren();
+            (data.annual || []).forEach((row) => {
+                const tr = document.createElement("tr");
+                const values = [
+                    row.year, compactMoney(row.totalRevenue), compactMoney(row.grossProfit),
+                    compactMoney(row.operatingIncome), compactMoney(row.netIncome),
+                    number(row.dilutedEPS ?? row.basicEPS), compactMoney(row.operatingCashFlow),
+                    compactMoney(row.freeCashFlow)
+                ];
+                values.forEach((value, index) => {
+                    const cell = document.createElement(index ? "td" : "th");
+                    cell.textContent = value ?? "尚無資料";
+                    cell.style.padding = "0.65rem";
+                    cell.style.borderBottom = "1px solid var(--border-color)";
+                    if (!index) cell.style.textAlign = "left";
+                    tr.appendChild(cell);
+                });
+                body.appendChild(tr);
+            });
+            if (!body.children.length) {
+                const row = document.createElement("tr");
+                const cell = document.createElement("td");
+                cell.colSpan = 8;
+                cell.textContent = "來源未提供年度財報資料。";
+                cell.style.padding = "0.65rem";
+                row.appendChild(cell);
+                body.appendChild(row);
+            }
+        }
+
+        function render(data) {
+            byId("c-name").textContent = `${data.name} (${data.symbol})`;
+            byId("c-price").textContent = money(data.price, data.currency);
+            byId("c-desc").textContent = data.description || "來源未提供公司簡介。";
+            byId("m-sp500-pe").textContent = multiple(data.valuation.sp500PE);
+            byId("m-pe").textContent = multiple(data.valuation.trailingPE);
+            byId("m-forward-pe").textContent = multiple(data.valuation.forwardPE);
+            byId("m-peg").textContent = number(data.valuation.peg);
+            byId("m-market-cap").textContent = compactMoney(data.valuation.marketCap);
+            byId("m-eps-ttm").textContent = money(data.valuation.trailingEps, data.currency);
+            const fear = data.market.fearGreed || {};
+            byId("m-fear-greed").textContent = number(fear.score, 0);
+            byId("m-fear-rating").textContent = fear.rating || "來源未提供";
+            byId("m-vix").textContent = number(data.market.vix);
+            byId("m-vxn").textContent = number(data.market.vxn);
+            byId("m-semi-vol").textContent = data.market.semiVolatility == null
+                ? "尚無資料" : `${number(data.market.semiVolatility, 1)}%`;
+            byId("m-rsi").textContent = number(data.market.rsi, 1);
+            byId("m-chart-price").textContent = number(data.price);
+            byId("m-ma10").textContent = number(data.market.ma10);
+            const trend = byId("trend-note");
+            if (data.market.rsi == null || data.market.ma10 == null || data.price == null) {
+                trend.textContent = "技術指標資料不足，無法判斷短期趨勢；此處不構成投資建議。";
+            } else {
+                const direction = data.price >= data.market.ma10 ? "價格高於 10 日均線" : "價格低於 10 日均線";
+                const rsiState = data.market.rsi >= 70 ? "RSI 顯示偏熱" :
+                    data.market.rsi <= 30 ? "RSI 顯示偏弱" : "RSI 位於常見區間";
+                trend.textContent = `${direction}；${rsiState}。僅供參考，不構成投資建議。`;
+            }
+            renderCriteria(data);
+            renderAnnual(data);
+            const warnings = Object.entries(data.errors || {});
+            byId("warnings").hidden = warnings.length === 0;
+            byId("warnings").textContent = warnings.length
+                ? `部分外部資料無法取得：${warnings.map(([source, message]) => `${source}：${message}`).join("；")}`
+                : "";
+        }
+
+        async function updateData(event) {
+            if (event) event.preventDefault();
+            const ticker = byId("ticker").value.trim().toUpperCase();
+            if (!ticker) return;
+            const button = byId("search-form").querySelector("button");
+            button.disabled = true;
+            byId("status").textContent = `正在抓取 ${ticker} 的資料…`;
+            byId("warnings").hidden = true;
+            try {
+                const response = await fetch(`/api/stock?symbol=${encodeURIComponent(ticker)}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `資料服務錯誤（${response.status}）`);
+                render(data);
+                byId("status").textContent =
+                    `資料已更新：${data.symbol}。數據來源可能延遲，請以官方資訊為準。`;
+            } catch (error) {
+                byId("status").textContent =
+                    `抓取失敗：${error.message}。請確認伺服器已啟動，並檢查網路連線或股票代號。`;
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        byId("search-form").addEventListener("submit", updateData);
+        updateData();
+    </script>
+</body>
+</html>
