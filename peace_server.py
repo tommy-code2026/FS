@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from functools import lru_cache
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -62,10 +63,17 @@ class YahooClient:
             urllib.request.HTTPCookieProcessor(self.cookies)
         )
         self.crumb = None
+        self.crumb_error = None
 
     def _ensure_crumb(self):
+        if self.crumb_error is not None:
+            raise RuntimeError(str(self.crumb_error)) from self.crumb_error
         if self.crumb is None:
-            self.crumb = self._get_crumb()
+            try:
+                self.crumb = self._get_crumb()
+            except Exception as error:
+                self.crumb_error = error
+                raise
         return self.crumb
 
     def _open(self, url):
@@ -153,6 +161,262 @@ class YahooClient:
                 if year and value is not None:
                     rows.setdefault(year, {"year": year})[field] = value
         return rows
+
+
+class NasdaqClient:
+    base_url = "https://api.nasdaq.com/api/quote/"
+
+    def get(self, symbol, endpoint, **params):
+        query = urllib.parse.urlencode(params)
+        url = (
+            self.base_url
+            + urllib.parse.quote(symbol, safe=".-")
+            + "/"
+            + endpoint
+            + ("?" + query if query else "")
+        )
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://www.nasdaq.com",
+                "Referer": "https://www.nasdaq.com/",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        status = payload.get("status") or {}
+        if status.get("rCode") not in (None, 200):
+            messages = status.get("bCodeMessage") or []
+            detail = "; ".join(
+                item.get("errorMessage", "")
+                for item in messages
+                if isinstance(item, dict)
+            )
+            raise RuntimeError(detail or "Nasdaq 未提供此股票資料。")
+        data = payload.get("data")
+        if not data:
+            raise RuntimeError("Nasdaq 未提供此股票資料。")
+        return data
+
+    @staticmethod
+    def numeric(value):
+        if value is None:
+            return None
+        match = re.search(r"-?[\d,]+(?:\.\d+)?", str(value))
+        return float(match.group(0).replace(",", "")) if match else None
+
+    def quote(self, symbol):
+        info = self.get(symbol, "info", assetclass="stocks")
+        summary = self.get(symbol, "summary", assetclass="stocks")
+        primary = info.get("primaryData") or {}
+        stats = summary.get("summaryData") or {}
+        return {
+            "price": {
+                "longName": info.get("companyName") or symbol,
+                "currency": "USD",
+                "regularMarketPrice": self.numeric(
+                    primary.get("lastSalePrice")
+                    or (info.get("secondaryData") or {}).get("lastSalePrice")
+                ),
+                "marketCap": self.numeric(
+                    (stats.get("MarketCap") or {}).get("value")
+                ),
+            },
+            "summaryProfile": {},
+            "summaryDetail": {
+                "trailingPE": self.numeric(
+                    (stats.get("PERatio") or {}).get("value")
+                ),
+            },
+            "defaultKeyStatistics": {},
+            "financialData": {},
+        }
+
+    def chart(self, symbol, days=370):
+        start = datetime.now(timezone.utc).date().toordinal() - days
+        start_date = datetime.fromordinal(start).strftime("%Y-%m-%d")
+        data = self.get(
+            symbol,
+            "historical",
+            assetclass="stocks",
+            fromdate=start_date,
+            limit=500,
+        )
+        rows = (data.get("tradesTable") or {}).get("rows") or []
+        history = []
+        for row in rows:
+            try:
+                date = datetime.strptime(row["date"], "%m/%d/%Y").replace(
+                    tzinfo=timezone.utc
+                )
+                close = self.numeric(row.get("close"))
+                if close is not None:
+                    history.append((int(date.timestamp()), close))
+            except (KeyError, ValueError):
+                continue
+        history.sort()
+        if not history:
+            raise RuntimeError("Nasdaq 未提供可用的歷史收盤價。")
+        closes = [close for _, close in history]
+        return {
+            "price": closes[-1],
+            "rsi": rsi(closes),
+            "ma10": sum(closes[-10:]) / 10 if len(closes) >= 10 else None,
+            "closes": closes,
+        }
+
+
+@lru_cache(maxsize=1)
+def sec_tickers():
+    user_agent = os.environ.get("SEC_USER_AGENT", "").strip()
+    if not user_agent or "@" not in user_agent:
+        raise RuntimeError(
+            "SEC EDGAR 需要在 Render 設定含聯絡 Email 的 SEC_USER_AGENT。"
+        )
+    request = urllib.request.Request(
+        "https://www.sec.gov/files/company_tickers.json",
+        headers={"User-Agent": user_agent, "Accept-Encoding": "identity"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+class SecClient:
+    FACT_TAGS = {
+        "totalRevenue": (
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "Revenues",
+            "SalesRevenueNet",
+        ),
+        "grossProfit": ("GrossProfit",),
+        "operatingIncome": ("OperatingIncomeLoss",),
+        "netIncome": ("NetIncomeLoss",),
+        "dilutedEPS": ("EarningsPerShareDiluted",),
+        "operatingCashFlow": ("NetCashProvidedByUsedInOperatingActivities",),
+        "capitalExpenditures": (
+            "PaymentsToAcquireProductiveAssets",
+            "PaymentsToAcquirePropertyPlantAndEquipment",
+        ),
+        "investingCashFlow": ("NetCashProvidedByUsedInInvestingActivities",),
+        "financingCashFlow": ("NetCashProvidedByUsedInFinancingActivities",),
+        "totalAssets": ("Assets",),
+        "longTermDebt": ("LongTermDebtNoncurrent", "LongTermDebt"),
+        "totalCurrentAssets": ("AssetsCurrent",),
+        "totalCurrentLiabilities": ("LiabilitiesCurrent",),
+        "stockholdersEquity": ("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+        "interestExpense": ("InterestExpenseNonOperating", "InterestAndDebtExpense"),
+    }
+
+    def get_facts(self, ticker):
+        company = next(
+            (
+                item
+                for item in sec_tickers().values()
+                if str(item.get("ticker", "")).casefold() == ticker.casefold()
+            ),
+            None,
+        )
+        if not company:
+            raise RuntimeError("SEC EDGAR 未收錄此股票代號。")
+        cik = int(company["cik_str"])
+        user_agent = os.environ["SEC_USER_AGENT"].strip()
+        return company, self.cached_company_facts(cik, user_agent)
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def cached_company_facts(cik, user_agent):
+        request = urllib.request.Request(
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json",
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json",
+                "Accept-Encoding": "identity",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return payload.get("facts", {}).get("us-gaap", {})
+
+    @staticmethod
+    def annual_entries(unit_rows):
+        selected = {}
+        for entry in unit_rows:
+            if entry.get("form") not in ("10-K", "20-F", "40-F"):
+                continue
+            start = entry.get("start")
+            end = entry.get("end")
+            if not end:
+                continue
+            if start:
+                try:
+                    duration = (
+                        datetime.strptime(end, "%Y-%m-%d")
+                        - datetime.strptime(start, "%Y-%m-%d")
+                    ).days
+                except ValueError:
+                    continue
+                if not 300 <= duration <= 400:
+                    continue
+            year = end[:4]
+            filed = entry.get("filed", "")
+            prior = selected.get(year)
+            if prior is None or filed > prior.get("filed", ""):
+                selected[year] = entry
+        return selected
+
+    def annual_statements(self, ticker):
+        company, facts = self.get_facts(ticker)
+        years = {}
+        for output_field, tag_names in self.FACT_TAGS.items():
+            selected_entries = {}
+            for tag_name in tag_names:
+                fact = facts.get(tag_name)
+                if not fact:
+                    continue
+                units = fact.get("units") or {}
+                if output_field == "dilutedEPS":
+                    entries = next(
+                        (
+                            rows
+                            for unit_name, rows in units.items()
+                            if unit_name.replace(" ", "").casefold()
+                            == "usd/shares"
+                        ),
+                        [],
+                    )
+                else:
+                    entries = units.get("USD", [])
+                for year, entry in self.annual_entries(entries).items():
+                    previous = selected_entries.get(year)
+                    if previous is None or entry.get("filed", "") > previous.get("filed", ""):
+                        selected_entries[year] = entry
+            for year, entry in selected_entries.items():
+                years.setdefault(year, {"year": year})[output_field] = entry["val"]
+
+        for row in years.values():
+            capex = row.get("capitalExpenditures")
+            operating_cash = row.get("operatingCashFlow")
+            if operating_cash is not None and capex is not None:
+                row["freeCashFlow"] = operating_cash - abs(capex)
+            debt = row.pop("longTermDebt", None)
+            if debt is not None:
+                row["longTermDebt"] = debt
+        if not years:
+            raise RuntimeError(f"SEC EDGAR 沒有 {ticker} 可用的年度財報。")
+        annual = sorted(years.values(), key=lambda item: item["year"], reverse=True)
+        summary = {
+            "price": {
+                "longName": company.get("title") or ticker,
+                "currency": "USD",
+            },
+            "summaryProfile": {},
+            "summaryDetail": {},
+            "defaultKeyStatistics": {},
+            "financialData": {},
+        }
+        return summary, {row["year"]: row for row in annual}
 
 
 class FMPClient:
@@ -304,6 +568,21 @@ def field_value(data, *names):
     return None
 
 
+def merge_summary_fallback(summary, fallback):
+    for key, value in fallback.items():
+        existing = summary.get(key)
+        if not isinstance(value, dict):
+            if existing is None:
+                summary[key] = value
+            continue
+        if not isinstance(existing, dict):
+            summary[key] = value
+            continue
+        for field, field_data in value.items():
+            if existing.get(field) is None:
+                existing[field] = field_data
+
+
 def records(module, *keys):
     for key in keys:
         value = module.get(key)
@@ -363,20 +642,30 @@ def latest_chart(client, symbol):
 
 
 def semi_volatility(client):
-    _, history = chart_data(client, "SOXX", "3mo")
-    closes = [close for _, close in history]
+    try:
+        _, history = chart_data(client, "SOXX", "3mo")
+        closes = [close for _, close in history]
+        provider = "Yahoo Finance"
+    except Exception as yahoo_error:
+        try:
+            closes = NasdaqClient().chart("SOXX", days=100)["closes"]
+            provider = "Nasdaq"
+        except Exception as nasdaq_error:
+            raise RuntimeError(
+                f"Yahoo Finance: {yahoo_error}; Nasdaq: {nasdaq_error}"
+            ) from nasdaq_error
     returns = [
         closes[index] / closes[index - 1] - 1
         for index in range(1, len(closes))
         if closes[index - 1]
     ][-30:]
     if len(returns) < 10:
-        return None
+        return None, provider
     mean = sum(returns) / len(returns)
     daily_deviation = math.sqrt(
         sum((value - mean) ** 2 for value in returns) / (len(returns) - 1)
     )
-    return daily_deviation * math.sqrt(252) * 100
+    return daily_deviation * math.sqrt(252) * 100, provider
 
 
 def external_json(url):
@@ -402,6 +691,53 @@ def fear_greed():
         "score": current.get("score"),
         "rating": current.get("rating"),
     }
+
+
+@lru_cache(maxsize=2)
+def cboe_index_chart(symbol):
+    if symbol not in ("^VIX", "^VXN"):
+        raise ValueError("Unsupported CBOE index.")
+    index = symbol[1:]
+    request = urllib.request.Request(
+        f"https://cdn.cboe.com/api/global/us_indices/daily_prices/{index}_History.csv",
+        headers={"User-Agent": USER_AGENT, "Accept": "text/csv,*/*"},
+    )
+    with urllib.request.urlopen(request, timeout=25) as response:
+        rows = response.read().decode("utf-8-sig").splitlines()
+    history = []
+    for row in rows[1:]:
+        fields = row.split(",")
+        if len(fields) < 5:
+            continue
+        try:
+            date = datetime.strptime(fields[0], "%m/%d/%Y").replace(
+                tzinfo=timezone.utc
+            )
+            history.append((int(date.timestamp()), float(fields[4])))
+        except ValueError:
+            continue
+    if not history:
+        raise RuntimeError(f"CBOE 沒有 {index} 的歷史資料。")
+    history.sort()
+    closes = [close for _, close in history]
+    return {
+        "price": closes[-1],
+        "rsi": rsi(closes[-251:]),
+        "ma10": sum(closes[-10:]) / 10 if len(closes) >= 10 else None,
+        "closes": closes,
+    }
+
+
+def volatility_index(symbol):
+    try:
+        return latest_chart(YahooClient(), symbol), "Yahoo Finance"
+    except Exception as yahoo_error:
+        try:
+            return cboe_index_chart(symbol), "CBOE"
+        except Exception as cboe_error:
+            raise RuntimeError(
+                f"Yahoo Finance: {yahoo_error}; CBOE: {cboe_error}"
+            ) from cboe_error
 
 
 def sp500_pe():
@@ -623,34 +959,101 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             return self.send_json(400, {"error": "請輸入有效的股票代號，例如 NVDA 或 2330.TW。"})
 
         try:
-            yahoo = YahooClient()
             errors = {}
+            sources = []
+            summary = {}
+            time_series = {}
+            stock_chart = None
+            yahoo = YahooClient()
             try:
                 summary = yahoo.quote_summary(symbol)
+                sources.append("Yahoo Finance")
+            except Exception as error:
+                errors["yahoo_quote"] = str(error)
+            try:
                 time_series = yahoo.annual_time_series(symbol)
+                if time_series:
+                    sources.append("Yahoo Finance 財報")
+            except Exception as error:
+                errors["yahoo_financials"] = str(error)
+            try:
                 stock_chart = latest_chart(yahoo, symbol)
-                data_source = "Yahoo Finance"
-            except Exception as yahoo_error:
-                api_key = os.environ.get("FMP_API_KEY", "").strip()
-                if not api_key:
-                    raise RuntimeError(
-                        "Yahoo Finance 暫時拒絕此服務的資料請求"
-                        f"（{yahoo_error}）。請在 Render 的 Environment 設定 "
-                        "FMP_API_KEY 作為備援資料來源；請勿把金鑰寫入前端或 GitHub。"
-                    ) from yahoo_error
+                if "Yahoo Finance" not in sources:
+                    sources.append("Yahoo Finance 行情")
+            except Exception as error:
+                errors["yahoo_chart"] = str(error)
+
+            if not summary.get("price", {}).get("regularMarketPrice"):
                 try:
-                    summary, time_series, stock_chart = FMPClient(api_key).stock_data(symbol)
-                    data_source = "Financial Modeling Prep"
-                except Exception as fmp_error:
-                    raise RuntimeError(
-                        "Yahoo Finance 無法提供資料"
-                        f"（{yahoo_error}）；FMP 備援也失敗（{fmp_error}）。"
-                    ) from fmp_error
+                    nasdaq_summary = NasdaqClient().quote(symbol)
+                    merge_summary_fallback(summary, nasdaq_summary)
+                    sources.append("Nasdaq")
+                except Exception as error:
+                    errors["nasdaq_quote"] = str(error)
+
+            if stock_chart is None:
+                try:
+                    stock_chart = NasdaqClient().chart(symbol)
+                    sources.append("Nasdaq 歷史行情")
+                except Exception as error:
+                    errors["nasdaq_chart"] = str(error)
+
+            recent_years = sorted(
+                time_series.values(),
+                key=lambda row: row["year"],
+                reverse=True,
+            )[:5]
+            sec_fields = ("totalRevenue", "netIncome", "operatingCashFlow", "totalAssets")
+            needs_sec = len(recent_years) < 5 or any(
+                any(row.get(field) is None for field in sec_fields)
+                for row in recent_years
+            )
+            if needs_sec:
+                try:
+                    sec_summary, sec_series = SecClient().annual_statements(symbol)
+                    if not summary.get("price", {}).get("longName"):
+                        summary["price"] = sec_summary["price"]
+                    for year, values in sec_series.items():
+                        target = time_series.setdefault(year, {"year": year})
+                        for field, value in values.items():
+                            target.setdefault(field, value)
+                    sources.append("SEC EDGAR")
+                except Exception as error:
+                    errors["sec_edgar"] = str(error)
+
+            api_key = os.environ.get("FMP_API_KEY", "").strip()
+            if api_key and (
+                not summary.get("price", {}).get("regularMarketPrice")
+                or not time_series
+                or stock_chart is None
+            ):
+                try:
+                    fmp_summary, fmp_series, fmp_chart = FMPClient(api_key).stock_data(symbol)
+                    merge_summary_fallback(summary, fmp_summary)
+                    for year, values in fmp_series.items():
+                        target = time_series.setdefault(year, {"year": year})
+                        for field, value in values.items():
+                            target.setdefault(field, value)
+                    if stock_chart is None:
+                        stock_chart = fmp_chart
+                    sources.append("Financial Modeling Prep")
+                except Exception as error:
+                    errors["fmp"] = str(error)
+
+            if not summary or stock_chart is None:
+                failure_details = "; ".join(
+                    f"{provider}: {message}" for provider, message in errors.items()
+                )
+                raise RuntimeError(
+                    "可用免費來源均未能完整取得公司行情，"
+                    "請確認代號是否受 Nasdaq/SEC 支援或稍後重試。"
+                    + (f" 詳細錯誤：{failure_details}" if failure_details else "")
+                )
 
             with ThreadPoolExecutor(max_workers=5) as pool:
                 futures = {
-                    "vix": pool.submit(latest_chart, YahooClient(), "^VIX"),
-                    "vxn": pool.submit(latest_chart, YahooClient(), "^VXN"),
+                    "vix": pool.submit(volatility_index, "^VIX"),
+                    "vxn": pool.submit(volatility_index, "^VXN"),
                     "semi_volatility": pool.submit(semi_volatility, YahooClient()),
                     "fear_greed": pool.submit(fear_greed),
                     "sp500_pe": pool.submit(sp500_pe),
@@ -660,17 +1063,23 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                     try:
                         result = future.result()
                         if key in ("vix", "vxn"):
-                            result = result.get("price")
+                            chart, provider = result
+                            result = chart.get("price")
+                            sources.append(f"{provider} {key.upper()}")
+                        elif key == "semi_volatility":
+                            result, provider = result
+                            sources.append(f"{provider} SOXX 波動率")
                         markets[key] = result
                     except Exception as error:
                         markets[key] = None
                         errors[key] = str(error)
             data = prepare_stock(symbol, summary, stock_chart, markets, errors, time_series)
-            data["dataSource"] = data_source
-            if data_source != "Yahoo Finance":
-                data["providerNotice"] = (
-                    f"Yahoo Finance 暫時不可用，已改用 {data_source}。"
-                )
+            data["dataSource"] = "、".join(dict.fromkeys(sources)) or "其他來源"
+            data["providers"] = sources
+            data["providerNotice"] = (
+                f"本次使用資料來源：{data['dataSource']}。各來源依欄位自動備援，"
+                "可能因代號、方案或服務狀態而無法提供全部資料。"
+            )
             self.send_json(200, data)
         except Exception as error:
             self.send_json(502, {"error": str(error)})

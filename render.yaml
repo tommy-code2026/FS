@@ -13,3 +13,5 @@ services:
         value: https://tommy-code2026.github.io
       - key: FMP_API_KEY
         sync: false
+      - key: SEC_USER_AGENT
+        sync: false
