@@ -68,6 +68,7 @@ class YahooClient:
         )
         self.crumb = None
         self.crumb_error = None
+        self.errors = {}
 
     def _ensure_crumb(self):
         if self.crumb_error is not None:
@@ -88,7 +89,7 @@ class YahooClient:
                 "Accept": "application/json,text/plain,*/*",
             },
         )
-        with self.opener.open(request, timeout=25) as response:
+        with self.opener.open(request, timeout=5) as response:
             return response.read()
 
     def _get_crumb(self):
@@ -114,6 +115,13 @@ class YahooClient:
         return json.loads(self._open(url).decode("utf-8"))
 
     def quote_summary(self, symbol):
+        try:
+            return self._quote_summary(symbol)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            self.errors["yahoo_quote"] = str(error)
+            return {}
+
+    def _quote_summary(self, symbol):
         query = urllib.parse.urlencode(
             {"modules": SUMMARY_MODULES, "crumb": self._ensure_crumb()}
         )
@@ -131,6 +139,13 @@ class YahooClient:
         return result[0]
 
     def annual_time_series(self, symbol):
+        try:
+            return self._annual_time_series(symbol)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            self.errors["yahoo_financials"] = str(error)
+            return {}
+
+    def _annual_time_series(self, symbol):
         now = int(time.time())
         query = urllib.parse.urlencode(
             {
@@ -283,11 +298,14 @@ def sec_tickers():
         "https://www.sec.gov/files/company_tickers.json",
         headers={"User-Agent": user_agent, "Accept-Encoding": "identity"},
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 class SecClient:
+    def __init__(self):
+        self.errors = {}
+
     QUALITATIVE_TERMS = {
         "intangible": r"patent|trademark|brand|intellectual property|license|proprietary",
         "cost": r"manufacturing cost|unit cost|economies of scale|cost advantage|supplier cost",
@@ -335,10 +353,14 @@ class SecClient:
     }
 
     def get_facts(self, ticker):
-        company = self.get_company(ticker)
-        cik = int(company["cik_str"])
-        user_agent = os.environ["SEC_USER_AGENT"].strip()
-        return company, self.cached_company_facts(cik, user_agent)
+        try:
+            company = self.get_company(ticker)
+            cik = int(company["cik_str"])
+            user_agent = os.environ["SEC_USER_AGENT"].strip()
+            return company, self.cached_company_facts(cik, user_agent)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            self.errors["sec_edgar"] = str(error)
+            return {}, {}
 
     @staticmethod
     def get_company(ticker):
@@ -365,7 +387,7 @@ class SecClient:
                 "Accept-Encoding": "identity",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
         return payload.get("facts", {}).get("us-gaap", {})
 
@@ -380,7 +402,7 @@ class SecClient:
                 "Accept-Encoding": "identity",
             },
         )
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
 
     @staticmethod
@@ -394,13 +416,20 @@ class SecClient:
                 "Accept-Encoding": "identity",
             },
         )
-        with urllib.request.urlopen(request, timeout=25) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             parser = _SECTextParser()
             parser.feed(response.read().decode("utf-8", errors="replace"))
         return " ".join(" ".join(parser.parts).split())
 
     @classmethod
     def qualitative_evidence(cls, ticker):
+        try:
+            return cls._qualitative_evidence(ticker)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            return {}, f"SEC 質化來源不可用：{error}"
+
+    @classmethod
+    def _qualitative_evidence(cls, ticker):
         company = cls.get_company(ticker)
         cik = int(company["cik_str"])
         user_agent = os.environ["SEC_USER_AGENT"].strip()
@@ -430,6 +459,7 @@ class SecClient:
             raise RuntimeError("SEC EDGAR 近期申報中沒有可用的年報、季報或委託書。")
 
         evidence = {}
+        failures = []
         for form, filed_at, accession, document in selected.values():
             safe_document = os.path.basename(document)
             accession_path = accession.replace("-", "")
@@ -437,7 +467,11 @@ class SecClient:
                 f"https://www.sec.gov/Archives/edgar/data/{cik}/"
                 f"{accession_path}/{urllib.parse.quote(safe_document)}"
             )
-            text = cls.cached_filing_text(filing_url, user_agent)
+            try:
+                text = cls.cached_filing_text(filing_url, user_agent)
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
+                failures.append(f"{form}: {error}")
+                continue
             for topic, terms in cls.QUALITATIVE_TERMS.items():
                 match = re.search(terms, text, re.IGNORECASE)
                 if not match:
@@ -451,7 +485,10 @@ class SecClient:
                     "url": filing_url,
                     "excerpt": text[start:end],
                 })
-        return evidence, f"SEC EDGAR 已抓取 {len(selected)} 份申報文件。"
+        status = f"SEC EDGAR 已抓取 {len(selected) - len(failures)} 份申報文件。"
+        if failures:
+            status += "部分文件不可用：" + "; ".join(failures)
+        return evidence, status
 
     @staticmethod
     def annual_entries(unit_rows):
@@ -482,6 +519,8 @@ class SecClient:
 
     def annual_statements(self, ticker):
         company, facts = self.get_facts(ticker)
+        if not facts and self.errors:
+            return {}, {}
         years = {}
         for output_field, tag_names in self.FACT_TAGS.items():
             selected_entries = {}
@@ -1382,7 +1421,8 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             yahoo = YahooClient()
             try:
                 summary = yahoo.quote_summary(symbol)
-                sources.append("Yahoo Finance")
+                if summary:
+                    sources.append("Yahoo Finance")
                 if field_value(summary.get("summaryProfile") or {}, "longBusinessSummary"):
                     description_source = "Yahoo Finance"
             except Exception as error:
@@ -1399,6 +1439,7 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                     sources.append("Yahoo Finance 行情")
             except Exception as error:
                 errors["yahoo_chart"] = str(error)
+            errors.update(yahoo.errors)
 
             if not summary.get("price", {}).get("regularMarketPrice"):
                 try:
@@ -1454,8 +1495,10 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             )
             if needs_sec:
                 try:
-                    sec_summary, sec_series = SecClient().annual_statements(symbol)
-                    if not summary.get("price", {}).get("longName"):
+                    sec = SecClient()
+                    sec_summary, sec_series = sec.annual_statements(symbol)
+                    errors.update(sec.errors)
+                    if sec_summary.get("price") and not summary.get("price", {}).get("longName"):
                         summary["price"] = sec_summary["price"]
                     for year, values in sec_series.items():
                         target = time_series.setdefault(year, {"year": year})
@@ -1464,7 +1507,8 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                             if field != "year" and value is not None:
                                 target[field] = value
                                 origins[field] = "SEC EDGAR"
-                    sources.append("SEC EDGAR")
+                    if sec_series:
+                        sources.append("SEC EDGAR")
                 except Exception as error:
                     errors["sec_edgar"] = str(error)
 
