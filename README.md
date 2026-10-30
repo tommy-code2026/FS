@@ -16,6 +16,6 @@ GitHub Pages 提供 PEACE 網頁，Render 執行股票資料 API。使用者開�
 6. 在 GitHub 儲存庫設定 **Pages**，將 `main` 分支的根目錄設為發佈來源。
 7. 確認 GitHub Pages 網址為 `https://tommy-code2026.github.io/FS/`，頁面呼叫 `https://peace-stock-analyzer.onrender.com/api/stock`。
 
-行情及財報會依序使用 Yahoo Finance、Nasdaq、SEC EDGAR，並可選擇 FMP API；VIX/VXN 備援來源為 CBOE，Fear & Greed 使用 CNN，S&P 500 PE 使用 Multpl。後端只允許設定的 GitHub Pages 網域跨網域讀取 API。免費方案可能在閒置後休眠，重新使用時第一次載入會比較慢。各來源覆蓋市場與欄位不相同，第三方來源若暫時無法使用或不支援該代號，頁面會顯示缺少資料或錯誤。
+行情先使用 Yahoo Finance，再以 Nasdaq 備援；若仍缺資料且已設定 `FMP_API_KEY`，再嘗試 FMP。年度財報先取得 Yahoo Finance 資料，再以 SEC EDGAR 官方年報欄位覆蓋可用值；SEC 缺欄時由 Yahoo 保留，若已設定 FMP key 則再補缺。SEC 僅涵蓋其收錄公司，並需設定 `SEC_USER_AGENT`。台股每日 PE 優先使用 TWSE OpenAPI，Yahoo Finance 為備援；TWSE 季度財報不會未經核對直接加總成年度資料。Nasdaq 目前只作行情備援，不作年度財報來源。
 
-Word 參考清單中的部分網站只有網頁、要求付費/登入，或回傳 403/429，沒有穩定且允許程式化存取的免費 API，因此沒有用不穩定的網頁解析取代正式資料來源。Nasdaq 與 SEC 主要涵蓋美國上市公司；例如 `2330.TW` 若 Yahoo 不可用且未設定可支援該市場的 FMP API，可能無法完成抓取。
+VIX/VXN 來源為 CBOE，Fear & Greed 使用 CNN，S&P 500 PE 使用 Multpl。StockAnalysis、Stockrow、GuruFocus、Morningstar、MacroMicro 等網站未確認有穩定且允許程式化存取的免費 API；頁面可瀏覽不代表可用作自動資料備援。質化分析會保留來源連結並將未取得資料明確標示，不以不穩定網頁解析或付費內容冒充已抓取數據。不同來源的覆蓋市場與欄位不相同，缺少欄位會保留為無資料。後端只允許設定的 GitHub Pages 網域跨網域讀取 API。免費方案可能在閒置後休眠，重新使用時第一次載入會比較慢。

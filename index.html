@@ -12,54 +12,79 @@
             --card-bg: #1e1e1e;
             --border-color: #333;
             --accent-color: #ff4b4b;
+            --muted-color: #aaa;
+            --input-border: #555;
+        }
+        [data-theme="light"] {
+            --bg-color: #f4f6f8;
+            --text-color: #18212b;
+            --sidebar-bg: #e7ebef;
+            --card-bg: #fff;
+            --border-color: #d3d9df;
+            --accent-color: #c83232;
+            --muted-color: #596675;
+            --input-border: #aab4bf;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
-        .sidebar {
-            width: 300px;
-            background-color: var(--sidebar-bg);
-            padding: 2rem 1.5rem;
+        .main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem 3rem;
             box-sizing: border-box;
-            overflow-y: auto;
         }
-        .sidebar input {
+        .topbar {
+            display: flex;
+            align-items: end;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .brand { flex: 1 1 240px; }
+        .brand h1 { margin: 0; font-size: 1.6rem; }
+        #search-form {
+            flex: 2 1 420px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.5rem;
+            align-items: end;
+        }
+        #search-form label {
+            grid-column: 1 / -1;
+            color: var(--muted-color);
+            font-size: 0.9rem;
+        }
+        #ticker {
             width: 100%;
-            padding: 0.5rem;
+            min-width: 0;
+            padding: 0.65rem 0.75rem;
             border-radius: 4px;
-            border: 1px solid #555;
+            border: 1px solid var(--input-border);
             background: var(--bg-color);
-            color: white;
-            margin-top: 10px;
+            color: var(--text-color);
             box-sizing: border-box;
             font-size: 1rem;
         }
-        .main {
-            flex: 1;
-            padding: 2rem 3rem;
-            overflow-y: auto;
-            box-sizing: border-box;
-        }
-        .grid-6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
-        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; }
+        .grid-6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 1rem; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 1.5rem; }
         .metric-card {
             background: var(--card-bg);
             padding: 1rem;
             border-radius: 8px;
             border: 1px solid var(--border-color);
         }
-        .metric-card h4 { margin: 0; color: #aaa; font-size: 0.9rem; font-weight: normal; }
-        .metric-card h2 { margin: 8px 0 0 0; font-size: 1.6rem; font-weight: 600;}
+        .metric-card h4 { margin: 0; color: var(--muted-color); font-size: 0.9rem; font-weight: normal; }
+        .metric-card h2 { margin: 8px 0 0 0; font-size: 1.4rem; font-weight: 600; overflow-wrap: anywhere;}
         .metric-card p { margin: 8px 0 0 0; font-size: 0.8rem; color: #00c07f; }
         .metric-card p.red { color: #ff4b4b; }
-        hr { border: 0; border-top: 1px solid var(--border-color); margin: 2rem 0; }
+        hr { border: 0; border-top: 1px solid var(--border-color); margin: 1.5rem 0; }
         .success-box {
             background-color: rgba(0, 200, 100, 0.1);
             border: 1px solid #00c07f;
@@ -69,35 +94,147 @@
         }
         .btn {
             background-color: var(--sidebar-bg);
-            border: 1px solid #555;
-            color: white;
-            padding: 0.6rem 1.2rem;
+            border: 1px solid var(--input-border);
+            color: var(--text-color);
+            padding: 0.65rem 1rem;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 1rem;
+            font-size: 0.95rem;
+            white-space: nowrap;
         }
         .btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .btn:disabled { opacity: 0.65; cursor: wait; }
         .checklist p { margin: 8px 0; line-height: 1.4;}
-        .section-title { color:#aaa; margin-top:1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem;}
+        .section-title { color:var(--muted-color); margin-top:1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem;}
+        .theme-button { align-self: end; }
+        .export-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .table-scroll { overflow-x: auto; }
+        #annual-table { min-width: 720px; }
+        .page-tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); margin: 0 0 1.5rem; }
+        .page-tabs .btn[aria-current="page"] { border-color: var(--accent-color); color: var(--accent-color); }
+        .analysis-intro { border-left: 3px solid var(--accent-color); padding: 0.25rem 1rem; margin-bottom: 1.25rem; }
+        .analysis-intro h2 { margin: 0 0 0.4rem; }
+        .analysis-intro p { margin: 0; color: var(--muted-color); line-height: 1.5; }
+        .analysis-section { border-top: 1px solid var(--border-color); padding: 1rem 0; }
+        .analysis-section > summary { cursor: pointer; font-size: 1.15rem; font-weight: 650; }
+        .analysis-section > summary::marker { color: var(--accent-color); }
+        .analysis-section > h3 { margin-top: 0; }
+        .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 1.25rem; }
+        .analysis-item { border-bottom: 1px solid var(--border-color); padding: 0.8rem 0; min-width: 0; }
+        .analysis-item h4 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+        .analysis-item p { margin: 0; line-height: 1.45; color: var(--muted-color); overflow-wrap: anywhere; }
+        .analysis-item strong { color: var(--text-color); }
+        .analysis-table { border-collapse: collapse; width: 100%; min-width: 780px; text-align: right; }
+        .analysis-table th, .analysis-table td { border-bottom: 1px solid var(--border-color); padding: 0.65rem 0.75rem; vertical-align: top; }
+        .analysis-table th:first-child, .analysis-table td:first-child { text-align: left; position: sticky; left: 0; background: var(--bg-color); }
+        .analysis-table thead th { color: var(--muted-color); font-weight: 600; }
+        .analysis-table small { display: block; color: var(--muted-color); margin-top: 0.2rem; white-space: normal; }
+        .analysis-note { color: var(--muted-color); font-size: 0.9rem; line-height: 1.5; }
+        .source-order { padding-left: 1.25rem; line-height: 1.65; }
+        .source-order li { padding: 0.2rem 0; }
+        .analysis-links { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin: 0.75rem 0; }
+        .analysis-links a { color: var(--accent-color); overflow-wrap: anywhere; }
+        #qualitative-page {
+            padding: 1.25rem;
+            border: 1px solid #333;
+            background: #fff;
+            color: #202020;
+            font-family: "Microsoft JhengHei", "PMingLiU", serif;
+            line-height: 1.55;
+        }
+        #qualitative-page .qualitative-section + .qualitative-section { margin-top: 1.5rem; }
+        #qualitative-page .qualitative-company { margin: 0 0 0.35rem; font-size: 2em; font-weight: 700; overflow-wrap: anywhere; }
+        #qualitative-page .qualitative-note { margin: 0 0 0.75rem; font-size: 2em; font-weight: 700; }
+        #qualitative-page .status-v { color: #16803c; }
+        #qualitative-page .status-o { color: #a85b00; }
+        #qualitative-page .status-x { color: #c62828; }
+        #qualitative-page .status-none { color: #606770; }
+        #qualitative-page .judgment-mark { display: inline-block; font-size: 3em; font-weight: 700; line-height: 1; }
+        #qualitative-page .qualitative-title { margin: 0 0 0.4rem; font-size: 1.15rem; }
+        #qualitative-page .qualitative-subtitle { margin: 0 0 0.75rem; font-size: 1rem; }
+        #qualitative-page .qualitative-sources { display: block; margin-top: 0.4rem; font-size: 0.8rem; overflow-wrap: anywhere; }
+        #qualitative-page .qualitative-sources a { color: #145c63; }
+        #qualitative-page .analysis-table {
+            min-width: 640px;
+            table-layout: fixed;
+            border: 1px solid #333;
+            background: #fff;
+            color: #202020;
+            text-align: left;
+        }
+        #qualitative-page .analysis-table th,
+        #qualitative-page .analysis-table td {
+            width: 33.333%;
+            border: 1px solid #444;
+            padding: 0.75rem 0.9rem;
+            color: #202020;
+            vertical-align: middle;
+        }
+        #qualitative-page .analysis-table th:nth-child(1),
+        #qualitative-page .analysis-table td:nth-child(1) { width: 24%; }
+        #qualitative-page .analysis-table th:nth-child(2),
+        #qualitative-page .analysis-table td:nth-child(2) { width: 66%; }
+        #qualitative-page .analysis-table th:nth-child(3),
+        #qualitative-page .analysis-table td:nth-child(3) { width: 10%; }
+        #qualitative-page .analysis-table th:nth-child(3),
+        #qualitative-page .analysis-table td:nth-child(3) { text-align: center; white-space: nowrap; }
+        #qualitative-page .analysis-table thead th {
+            background: #ececec;
+            color: #111;
+            font-weight: 700;
+            text-align: center;
+        }
+        #qualitative-page .analysis-table th:first-child,
+        #qualitative-page .analysis-table td:first-child {
+            position: static;
+            background: inherit;
+        }
+        #qualitative-page .analysis-table tbody td:first-child { font-weight: 600; }
+        @media (max-width: 640px) {
+            .main { padding: 1rem 0.85rem 2rem; }
+            .topbar { align-items: stretch; gap: 0.8rem; }
+            .brand h1 { font-size: 1.35rem; }
+            #search-form { flex: 1 1 100%; }
+            .theme-button { align-self: stretch; }
+            #company-info h2 { font-size: 1.5rem !important; overflow-wrap: anywhere; }
+            .metric-card { padding: 0.8rem; }
+            .grid-2 { gap: 1rem; }
+            .page-tabs { position: sticky; top: 0; z-index: 2; background: var(--bg-color); padding: 0.5rem 0; }
+            .page-tabs .btn { flex: 1; }
+            .analysis-table th, .analysis-table td { padding: 0.55rem 0.5rem; }
+            #qualitative-page { padding: 0.75rem; }
+            #qualitative-page .analysis-table th,
+            #qualitative-page .analysis-table td { padding: 0.65rem; }
+        }
+        @media print {
+            body { background: #fff; color: #111; }
+            .topbar, .export-actions { display: none; }
+            .main { max-width: none; padding: 0; }
+            .metric-card { break-inside: avoid; }
+        }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>🔍 股票搜尋</h2>
+    <main class="main">
+        <header class="topbar">
+            <div class="brand"><h1>PEACE 股票品質分析</h1></div>
         <form id="search-form">
-            <label for="ticker">輸入代號（例：NVDA、2330.TW）</label>
+            <label for="ticker">股票搜尋（例：NVDA、2330.TW）</label>
             <input type="text" id="ticker" value="NVDA" autocomplete="off" required>
-            <button class="btn" type="submit" style="margin-top: 10px; width: 100%;">抓取資料</button>
+            <button class="btn" type="submit">抓取資料</button>
         </form>
-        <p style="font-size: 0.85rem; color: #888; margin-top: 20px;">🌙 <i>夜間模式為預設</i></p>
-        <p style="font-size: 0.85rem; color: #aaa;">先雙擊「啟動PEACE.bat」，再輸入股票代號即可抓取資料。</p>
-    </div>
-    <div class="main">
-        <h1>PEACE 股票品質分析(加強版)</h1>
+            <button class="btn theme-button" id="theme-toggle" type="button" aria-pressed="false">切換至日間模式</button>
+        </header>
+        <nav class="page-tabs" aria-label="分析頁面">
+            <button class="btn" id="peace-tab" type="button" aria-current="page">PEACE</button>
+            <button class="btn" id="qualitative-tab" type="button" aria-current="false">質化分析</button>
+        </nav>
+        <section id="peace-page" class="page-panel" aria-labelledby="peace-tab">
+        <div id="report-content">
         <div id="company-info">
             <h2 style="margin-bottom:0; font-size: 2rem;" id="c-name">輸入股票代號以載入資料</h2>
-            <h3 style="margin-top:5px; color:#aaa; font-weight: normal;" id="c-price">—</h3>
-            <p style="color:#ddd; line-height: 1.6; font-size: 1rem;" id="c-desc"></p>
+            <h3 style="margin-top:5px; color:var(--muted-color); font-weight: normal;" id="c-price">—</h3>
+            <p style="color:var(--text-color); line-height: 1.6; font-size: 1rem;" id="c-desc"></p>
         </div>
         <p id="status" role="status" aria-live="polite">資料透過 Yahoo Finance 等參考來源抓取；請使用網站網址或先啟動本機服務。直接開啟 HTML 檔無法啟動資料服務。</p>
         <div id="warnings" class="success-box" hidden></div>
@@ -106,21 +243,22 @@
         
         <h3>📊 估值指標</h3>
         <div class="grid-6">
-            <div class="metric-card"><h4>S&amp;P 500 PE</h4><h2 id="m-sp500-pe">—</h2></div>
-            <div class="metric-card"><h4>目前 PE</h4><h2 id="m-pe">—</h2></div>
-            <div class="metric-card"><h4>Forward PE</h4><h2 id="m-forward-pe">—</h2></div>
-            <div class="metric-card"><h4>目前 PEG</h4><h2 id="m-peg">—</h2></div>
+            <div class="metric-card"><h4>S&amp;P 500 本益比</h4><h2 id="m-sp500-pe">—</h2></div>
+            <div class="metric-card"><h4>目前本益比</h4><h2 id="m-pe">—</h2><p id="m-pe-date">來源日期未提供</p></div>
+            <div class="metric-card"><h4>15 年最低本益比</h4><h2 id="m-pe-15y-low">尚無資料</h2><p>尚無可驗證的 15 年歷史本益比資料</p></div>
+            <div class="metric-card"><h4>預估本益比</h4><h2 id="m-forward-pe">—</h2></div>
+            <div class="metric-card"><h4>本益成長比（PEG）</h4><h2 id="m-peg">—</h2></div>
             <div class="metric-card"><h4>市值</h4><h2 id="m-market-cap">—</h2></div>
-            <div class="metric-card"><h4>Trailing EPS</h4><h2 id="m-eps-ttm">—</h2></div>
+            <div class="metric-card"><h4>近 12 個月每股盈餘</h4><h2 id="m-eps-ttm">—</h2></div>
         </div>
 
         <hr>
 
-        <h3>🌊 市場情緒與波動(VIX)</h3>
+        <h3>🌊 市場情緒與波動</h3>
         <div class="grid-4">
-            <div class="metric-card"><h4>Fear &amp; Greed</h4><h2 id="m-fear-greed">—</h2><p id="m-fear-rating"></p></div>
-            <div class="metric-card"><h4>S&amp;P 500 VIX</h4><h2 id="m-vix">—</h2><p>^VIX 指數</p></div>
-            <div class="metric-card"><h4>Nasdaq VIX</h4><h2 id="m-vxn">—</h2><p>^VXN 指數</p></div>
+            <div class="metric-card"><h4>市場恐懼與貪婪指數</h4><h2 id="m-fear-greed">—</h2><p id="m-fear-rating"></p></div>
+            <div class="metric-card"><h4>S&amp;P 500 波動率（VIX）</h4><h2 id="m-vix">—</h2><p>市場波動指數</p></div>
+            <div class="metric-card"><h4>Nasdaq 波動率（VXN）</h4><h2 id="m-vxn">—</h2><p>科技股市場波動指數</p></div>
             <div class="metric-card"><h4>半導體波動率（估算）</h4><h2 id="m-semi-vol">—</h2><p>SOXX 近 30 日年化波動率</p></div>
         </div>
 
@@ -128,7 +266,7 @@
 
         <h3>📈 技術指標</h3>
         <div class="success-box" id="trend-note">等待行情資料。</div>
-        <p style="margin-top: 1rem; color: #ddd;"><strong>RSI(14):</strong> <span id="m-rsi">—</span> | <strong>Price:</strong> <span id="m-chart-price">—</span> | <strong>10MA:</strong> <span id="m-ma10">—</span></p>
+        <p style="margin-top: 1rem; color: var(--text-color);"><strong>相對強弱指數（14日）：</strong> <span id="m-rsi">—</span> | <strong>股價：</strong> <span id="m-chart-price">—</span> | <strong>10日均線：</strong> <span id="m-ma10">—</span></p>
 
         <hr>
 
@@ -138,7 +276,7 @@
 
         <hr>
         <h3>📋 年度財報（來源自動備援）</h3>
-        <div style="overflow-x:auto;">
+        <div class="table-scroll">
             <table id="annual-table" style="width:100%; border-collapse:collapse; text-align:right;">
                 <thead><tr>
                     <th style="text-align:left;">年度</th><th>營收</th><th>毛利</th>
@@ -150,8 +288,37 @@
         </div>
 
         <hr>
-        <button class="btn" onclick="window.print()">📥 匯出報告 (生成HTML 報表，建議列印為PDF)</button>
-    </div>
+        </div>
+        </section>
+        <section id="qualitative-page" class="page-panel" aria-labelledby="qualitative-tab" hidden>
+            <div class="qualitative-section">
+                <p class="qualitative-company" id="qualitative-company"></p>
+                <p class="qualitative-note">質化分析 (<span class="status-v">V符合</span>, <span class="status-o">O部分</span>, <span class="status-x">X不符</span>, <span class="status-none">—無資料</span>)</p>
+                <h2 class="qualitative-title">優勢分析＊至少 1 項，越多越高</h2>
+                <h3 class="qualitative-subtitle">護城河</h3>
+                <div class="table-scroll">
+                    <table class="analysis-table">
+                        <thead><tr><th>檢查項目</th><th>說明</th><th>判斷</th></tr></thead>
+                        <tbody id="qual-moat-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="qualitative-section">
+                <h2 class="qualitative-title">風險分析  ＊主要判斷，股價波動時注意</h2>
+                <h3 class="qualitative-subtitle">RISK</h3>
+                <div class="table-scroll">
+                    <table class="analysis-table">
+                        <thead><tr><th>檢查項目</th><th>說明</th><th>判斷</th></tr></thead>
+                        <tbody id="qual-risk-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <div class="export-actions" aria-label="另存報告">
+            <button class="btn" id="save-html" type="button">另存 HTML 檔案</button>
+            <button class="btn" id="save-word" type="button">另存 Word 檔案</button>
+        </div>
+    </main>
     <script>
         const byId = (id) => document.getElementById(id);
         const API_BASE_URL = window.location.hostname.endsWith(".github.io")
@@ -176,8 +343,8 @@
         const compactMoney = (value) => {
             if (value === null || value === undefined) return "尚無資料";
             const abs = Math.abs(value);
-            const unit = abs >= 1e12 ? "T" : abs >= 1e9 ? "B" : abs >= 1e6 ? "M" : "";
-            const divisor = unit === "T" ? 1e12 : unit === "B" ? 1e9 : unit === "M" ? 1e6 : 1;
+            const unit = abs >= 1e12 ? "T" : abs >= 1e9 ? "B" : abs >= 1e6 ? "M" : abs >= 1e3 ? "K" : "";
+            const divisor = unit === "T" ? 1e12 : unit === "B" ? 1e9 : unit === "M" ? 1e6 : unit === "K" ? 1e3 : 1;
             return `${number(value / divisor)}${unit}`;
         };
         const assessChecks = (data) => {
@@ -196,6 +363,20 @@
                 values.every((value) => value > 0) &&
                 values.every((value, index) => index === 0 || value >= values[index - 1]);
             const positiveGrowth = (values) => values[0] > 0 && values.at(-1) > values[0];
+            const grossMarginCheck = () => {
+                if (rows.length < 2) return { passed: null, evidence: "需兩年完整營收與毛利資料" };
+                const latest = rows[0];
+                const prior = rows[1];
+                if ([latest, prior].some((row) =>
+                    row.totalRevenue == null || row.totalRevenue <= 0 || row.grossProfit == null
+                )) return { passed: null, evidence: "營收或毛利資料不足" };
+                const latestMargin = latest.grossProfit / latest.totalRevenue;
+                const priorMargin = prior.grossProfit / prior.totalRevenue;
+                return {
+                    passed: latestMargin > 0 && latestMargin >= priorMargin,
+                    evidence: `${prior.year} ${ratio(priorMargin)} → ${latest.year} ${ratio(latestMargin)}`
+                };
+            };
             const cashQualityCheck = () => {
                 if (rows.length < 5) return null;
                 const values = rows.slice(0, 5).map((row) =>
@@ -216,43 +397,44 @@
                 );
             };
             const latest = rows[0] || {};
+            const grossMargin = grossMarginCheck();
             const combinedDebtCheck = metric.debtEquity == null || metric.interestCoverage == null
                 ? null
                 : metric.debtEquity < 0.5 && metric.interestCoverage > 3;
             const checks = [
-                ["獲利（P）", "1. 5年營收皆為正且不衰退", fiveYears("totalRevenue", nonDecliningAndPositive), "—"],
-                ["獲利（P）", "2. 5年毛利皆為正且不衰退", fiveYears("grossProfit", nonDecliningAndPositive), "—"],
-                ["獲利（P）", "3. 5年營業利益皆為正且不衰退", fiveYears("operatingIncome", nonDecliningAndPositive), "—"],
-                ["獲利（P）", "4. 5年 EPS 皆為正且不衰退", fiveYears("dilutedEPS", nonDecliningAndPositive), "—"],
-                ["成長（E）", "5. 5年營收正成長", fiveYears("totalRevenue", positiveGrowth), "—"],
-                ["成長（E）", "6. 5年營業利益正成長", fiveYears("operatingIncome", positiveGrowth), "—"],
-                ["成長（E）", "7. 5年 EPS 正成長", fiveYears("dilutedEPS", positiveGrowth), "—"],
-                ["現金（A）", "8. 營運及自由現金流持續增加且皆為正",
+                ["獲利能力（P）", "1. 近5年營收皆為正且未逐年下降", fiveYears("totalRevenue", nonDecliningAndPositive), "—"],
+                ["獲利能力（P）", "2. 近2年毛利率為正且未下降", grossMargin.passed, grossMargin.evidence],
+                ["獲利能力（P）", "3. 近5年營業利益皆為正且未逐年下降", fiveYears("operatingIncome", nonDecliningAndPositive), "—"],
+                ["獲利能力（P）", "4. 近5年每股稀釋盈餘皆為正且未逐年下降", fiveYears("dilutedEPS", nonDecliningAndPositive), "—"],
+                ["成長能力（E）", "5. 近5年營收正成長", fiveYears("totalRevenue", positiveGrowth), "—"],
+                ["成長能力（E）", "6. 近5年營業利益正成長", fiveYears("operatingIncome", positiveGrowth), "—"],
+                ["成長能力（E）", "7. 近5年每股稀釋盈餘正成長", fiveYears("dilutedEPS", positiveGrowth), "—"],
+                ["現金流（A）", "8. 近5年營運現金流與自由現金流持續增加且皆為正",
                     fiveYears("operatingCashFlow", positiveGrowth) === true &&
                     fiveYears("freeCashFlow", positiveGrowth) === true ? true :
                     fiveYears("operatingCashFlow", positiveGrowth) === null ||
                     fiveYears("freeCashFlow", positiveGrowth) === null ? null : false, "—"],
-                ["現金（A）", "9. 5年營運現金流皆高於投資及融資現金流", cashFlowCheck(), "—"],
-                ["現金（A）", "10. 5年營運現金流／淨利皆大於 0.8", cashQualityCheck(),
+                ["現金流（A）", "9. 近5年營運現金流皆高於投資與融資現金流", cashFlowCheck(), "—"],
+                ["現金流（A）", "10. 近5年營運現金流／淨利皆大於 0.8", cashQualityCheck(),
                     `最新年度 ${number(latest.operatingCashFlow && latest.netIncome
                         ? latest.operatingCashFlow / latest.netIncome : null)}`],
-                ["保守（C）", "11. 負債權益比 < 0.5 且利息保障倍數 > 3", combinedDebtCheck,
-                    `D/E ${number(metric.debtEquity)}；利息保障 ${multiple(metric.interestCoverage)}`],
-                ["保守（C）", "12. 流動比率 > 1", metric.currentRatio == null ? null : metric.currentRatio > 1,
-                    `CR ${number(metric.currentRatio)}`],
-                ["保守（C）", "13. 長期負債／淨利 < 4",
+                ["財務安全（C）", "11. 負債權益比低於 0.5 且利息保障倍數高於 3", combinedDebtCheck,
+                    `負債權益比 ${number(metric.debtEquity)}；利息保障倍數 ${multiple(metric.interestCoverage)}`],
+                ["財務安全（C）", "12. 流動比率大於 1", metric.currentRatio == null ? null : metric.currentRatio > 1,
+                    `流動比率 ${number(metric.currentRatio)}`],
+                ["財務安全（C）", "13. 長期負債／淨利小於 4",
                     metric.longDebtNetIncome == null ? null : metric.longDebtNetIncome < 4,
                     number(metric.longDebtNetIncome)],
-                ["效率（E）", "14. 平均 ROE > 15%",
+                ["營運效率（E）", "14. 平均股東權益報酬率 ROE 高於 15%",
                     metric.averageROE == null ? null : metric.averageROE > 0.15, ratio(metric.averageROE)],
-                ["效率（E）", "15. 總資產週轉率 > 0.7",
-                    metric.assetTurnover == null ? null : metric.assetTurnover > 0.7, number(metric.assetTurnover)],
-                ["效率（E）", "16. ROIC > WACC",
+                ["營運效率（E）", "15. 總資產週轉率高於同業平均",
+                    null, `總資產週轉率 ${number(metric.assetTurnover)}；來源未提供同業基準`],
+                ["營運效率（E）", "16. 投入資本報酬率 ROIC 高於加權平均資金成本 WACC",
                     metric.roic == null || metric.wacc == null ? null : metric.roic > metric.wacc,
-                    `ROIC ${ratio(metric.roic)} / WACC ${ratio(metric.wacc)}`],
-                ["加分", "17. GP/A ≥ 0.33",
+                    `ROIC ${ratio(metric.roic)}；WACC ${ratio(metric.wacc)}；尚無可靠計算來源`],
+                ["加分項目", "17. 毛利／總資產比率 GP/A 不低於 0.33",
                     metric.gpAssets == null ? null : metric.gpAssets >= 0.33, ratio(metric.gpAssets)],
-                ["加分", "18. FCF Margin > 15%",
+                ["加分項目", "18. 自由現金流利潤率高於 15%",
                     metric.fcfMargin == null ? null : metric.fcfMargin > 0.15, ratio(metric.fcfMargin)]
             ];
             return checks.map(([group, label, passed, evidence], index) =>
@@ -269,10 +451,10 @@
             const bonusPassed = bonus.filter((item) => item.passed === true).length;
             byId("score-heading").textContent = `PEACE 評估：${passed} / 16（加分 ${bonusPassed} / 2）`;
             byId("score-note").textContent =
-                `基本項目已判定 ${known} / 16；5年條件以 Yahoo Finance 可取得的年度資料計算，資料不足或來源未提供的項目不會猜測。`;
+                `16 項基本檢核中已判定 ${known} 項；毛利率以最近兩年毛利除以營收計算。資料不足或缺少同業基準時不推測，也不列入已判定項目。`;
             const container = byId("criteria");
             container.replaceChildren();
-            ["獲利（P）", "成長（E）", "現金（A）", "保守（C）", "效率（E）", "加分"].forEach((group) => {
+            ["獲利能力（P）", "成長能力（E）", "現金流（A）", "財務安全（C）", "營運效率（E）", "加分項目"].forEach((group) => {
                 const section = document.createElement("section");
                 const heading = document.createElement("h4");
                 heading.className = "section-title";
@@ -281,7 +463,10 @@
                 results.filter((item) => item.group === group).forEach((item) => {
                     const line = document.createElement("p");
                     const icon = item.passed === true ? "✔️" : item.passed === false ? "❌" : "⚪";
-                    line.textContent = `${icon} ${item.label}${item.evidence === "—" ? "" : `（${item.evidence}）`}`;
+                    const evidence = item.passed === null
+                        ? `無法判定：${item.evidence === "—" ? "資料不足或來源未提供" : item.evidence}`
+                        : item.evidence === "—" ? "" : item.evidence;
+                    line.textContent = `${icon} ${item.label}${evidence ? `（${evidence}）` : ""}`;
                     section.appendChild(line);
                 });
                 container.appendChild(section);
@@ -320,12 +505,544 @@
             }
         }
 
+        const analysisValue = (row, key) => {
+            const value = row?.[key];
+            return value === null || value === undefined || !Number.isFinite(Number(value))
+                ? null : Number(value);
+        };
+        const safeDivide = (numerator, denominator) =>
+            numerator === null || denominator === null || denominator === 0
+                ? null : numerator / denominator;
+        const sourceConfidence = (source, calculated = false) => {
+            if (calculated) return "D · 計算";
+            if (source === "SEC EDGAR") return "A · 官方申報";
+            if (source === "Yahoo Finance" || source === "Nasdaq") return "B · 資料供應商";
+            if (source === "Financial Modeling Prep") return "C · 第三方 API";
+            return "E · 無資料";
+        };
+        const sourceUrl = (source, symbol) => {
+            if (source === "SEC EDGAR")
+                return `https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(symbol)}`;
+            if (source === "Yahoo Finance")
+                return `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`;
+            return "";
+        };
+        function addAnalysisItems(containerId, items) {
+            const container = byId(containerId);
+            container.replaceChildren();
+            items.forEach((item) => {
+                const block = document.createElement("div");
+                block.className = "analysis-item";
+                const heading = document.createElement("h4");
+                heading.textContent = item.label;
+                const value = document.createElement("p");
+                const strong = document.createElement("strong");
+                strong.textContent = item.value ?? "無資料";
+                value.appendChild(strong);
+                if (item.note) value.append(` · ${item.note}`);
+                block.append(heading, value);
+                container.appendChild(block);
+            });
+        }
+        function renderYearTable(headId, bodyId, years, columns) {
+            const head = byId(headId);
+            const body = byId(bodyId);
+            head.replaceChildren();
+            body.replaceChildren();
+            const header = document.createElement("tr");
+            ["項目", ...years.map((row) => `FY ${row.year}`)].forEach((label) => {
+                const cell = document.createElement("th");
+                cell.textContent = label;
+                header.appendChild(cell);
+            });
+            head.appendChild(header);
+            columns.forEach((column) => {
+                const row = document.createElement("tr");
+                const label = document.createElement("th");
+                label.scope = "row";
+                label.textContent = column.label;
+                row.appendChild(label);
+                years.forEach((year, index) => {
+                    const cell = document.createElement("td");
+                    const result = column.get(year, index) || {};
+                    cell.append(document.createTextNode(result.value ?? "無資料"));
+                    const source = result.source || "";
+                    const confidence = result.calculated ? "D" : "";
+                    if (source || confidence) {
+                        const note = document.createElement("small");
+                        note.textContent = [source, confidence].filter(Boolean).join(" · ");
+                        cell.appendChild(note);
+                    }
+                    row.appendChild(cell);
+                });
+                body.appendChild(row);
+            });
+        }
+        function renderQualitative(data) {
+            {
+                const symbol = data?.symbol || "";
+                byId("qualitative-company").textContent = `${data?.name || symbol} (${symbol})`;
+                const encodedSymbol = encodeURIComponent(symbol);
+                const yahooUrl = `https://finance.yahoo.com/quote/${encodedSymbol}/`;
+                const secUrl = `https://www.sec.gov/edgar/search/#/q=${encodedSymbol}`;
+                const referenceLinks = [
+                    {label: "Yahoo Finance", url: yahooUrl},
+                    {label: "SEC EDGAR（申報檢索）", url: secUrl}
+                ];
+                const sourceUrlFor = (source) => {
+                    if (source.startsWith("SEC EDGAR")) return secUrl;
+                    if (source.startsWith("Yahoo Finance")) return yahooUrl;
+                    if (source.startsWith("Nasdaq"))
+                        return `https://www.nasdaq.com/market-activity/stocks/${encodedSymbol.toLowerCase()}`;
+                    if (source.startsWith("TWSE")) return "https://openapi.twse.com.tw/";
+                    if (source.startsWith("Financial Modeling Prep"))
+                        return "https://site.financialmodelingprep.com/";
+                    return "";
+                };
+                const annual = (data?.annual || []).slice().sort((left, right) =>
+                    String(right.year || "").localeCompare(String(left.year || "")));
+                const grossMargins = annual.map((row) => ({
+                    year: row.year,
+                    value: safeDivide(analysisValue(row, "grossProfit"), analysisValue(row, "totalRevenue")),
+                    sources: [row.fieldSources?.grossProfit, row.fieldSources?.totalRevenue].filter(Boolean)
+                })).filter((row) => row.value !== null);
+                const recentMargins = grossMargins.slice(0, 5).reverse();
+                const costJudgment = recentMargins.length >= 3 && recentMargins.every((row) => row.value > 0)
+                    ? "O" : "-";
+                const marginHistory = recentMargins
+                    .map((row) => `FY ${row.year} ${ratio(row.value)}`).join("、");
+                const marginSources = [...new Set(recentMargins.flatMap((row) => row.sources))];
+                const description = String(data?.description || "").replace(/\s+/g, " ").trim();
+                const profileEvidence = description
+                    ? `${description.slice(0, 160)}${description.length > 160 ? "…" : ""}`
+                    : "本次未取得公司簡介。";
+                const platformSignal = /platform|ecosystem|marketplace|network|community|connect|share|developer|user base/i.test(description);
+                const workflowSignal = /enterprise|cloud|workspace|subscription|infrastructure|workflow|developer|software-as-a-service|saas/i.test(description);
+                const revenueHistory = annual.slice(0, 5).reverse().filter((row) => row.totalRevenue != null);
+                const revenueTrend = revenueHistory.length >= 2
+                    ? `FY ${revenueHistory[0].year} ${compactMoney(revenueHistory[0].totalRevenue)} 至 FY ${revenueHistory.at(-1).year} ${compactMoney(revenueHistory.at(-1).totalRevenue)}`
+                    : revenueHistory.length === 1
+                        ? `FY ${revenueHistory[0].year} ${compactMoney(revenueHistory[0].totalRevenue)}`
+                        : "尚無可用年度營收";
+                const sourceLinks = (sources) => [...new Set(sources)]
+                    .map((source) => ({label: source, url: sourceUrlFor(source)}))
+                    .filter((source) => source.url);
+                const renderRows = (bodyId, items) => {
+                    const body = byId(bodyId);
+                    body.replaceChildren();
+                    items.forEach((item) => {
+                        const row = document.createElement("tr");
+                        const label = document.createElement("td");
+                        label.textContent = item.label;
+                        const explanation = document.createElement("td");
+                        explanation.appendChild(document.createTextNode(item.explanation));
+                        if (item.sources.length) {
+                            const links = document.createElement("small");
+                            links.className = "qualitative-sources";
+                            links.append("來源／核對：");
+                            item.sources.forEach((source, index) => {
+                                if (index) links.append(" · ");
+                                const link = document.createElement("a");
+                                link.href = source.url;
+                                link.target = "_blank";
+                                link.rel = "noopener noreferrer";
+                                link.textContent = source.label;
+                                links.appendChild(link);
+                            });
+                            explanation.appendChild(links);
+                        }
+                        const judgment = document.createElement("td");
+                        const judgmentText = item.judgment.trim().replace(/^-/, "—").slice(0, 1);
+                        const mark = document.createElement("span");
+                        mark.className = "judgment-mark " + (judgmentText.startsWith("V") ? "status-v"
+                            : judgmentText.startsWith("O") ? "status-o"
+                            : judgmentText.startsWith("X") ? "status-x" : "status-none");
+                        mark.textContent = judgmentText;
+                        judgment.appendChild(mark);
+                        judgment.setAttribute("aria-label", `判斷：${judgmentText}`);
+                        row.append(label, explanation, judgment);
+                        body.appendChild(row);
+                    });
+                };
+                const companyReferences = sourceLinks(["Yahoo Finance", "SEC EDGAR（申報檢索）"]);
+                const moatSources = sourceLinks(marginSources.length ? marginSources : ["Yahoo Finance"]);
+                const moatRows = [
+                    {
+                        label: "無形資產",
+                        explanation: `公司業務資料：${profileEvidence}。近年營收 ${revenueTrend}；但公司簡介與財報欄位未提供品牌溢價、專利／授權收入或無形資產回報，營收規模不能單獨證明無形資產護城河。`,
+                        judgment: "-", sources: companyReferences
+                    },
+                    {
+                        label: "成本優勢",
+                        explanation: recentMargins.length >= 3
+                            ? `近 ${recentMargins.length} 個可用年度毛利率：${marginHistory}。持續正毛利僅是營運效率的間接線索；缺少同業單位成本及價格比較，故僅列部分支持。`
+                            : `可用毛利率年度${marginHistory ? `：${marginHistory}` : "不足"}；目前少於三個年度，且缺少同業單位成本比較，無法判定成本優勢。`,
+                        judgment: costJudgment,
+                        sources: moatSources
+                    },
+                    {
+                        label: "網路效應",
+                        explanation: platformSignal
+                            ? `公司簡介呈現平台／社群／連結或生態系線索：${profileEvidence}。這是網路效應的初步定性線索；目前未取得活躍用戶、互動密度、留存率或多邊交易資料，不能據此確認效應強度。`
+                            : `公司業務資料：${profileEvidence}。目前未取得活躍用戶、互動密度、留存率或多邊交易資料，無法確認網路效應。`,
+                        judgment: platformSignal ? "O" : "-", sources: companyReferences
+                    },
+                    {
+                        label: "高轉換成本",
+                        explanation: workflowSignal
+                            ? `公司簡介顯示企業、雲端、訂閱或工作流程型服務線索：${profileEvidence}。此類整合可能增加更換成本，但目前沒有客戶留存、流失、續約或實際遷移成本數據，故只作部分支持。`
+                            : `公司業務資料：${profileEvidence}。目前未取得客戶留存、流失、續約或實際遷移成本數據，無法確認更換障礙。`,
+                        judgment: workflowSignal ? "O" : "-", sources: companyReferences
+                    },
+                    {
+                        label: "有效規模",
+                        explanation: `近年營收 ${revenueTrend}。營收可反映公司規模，但有效規模還需市場容量、份額、競爭者數量及進入障礙；目前沒有可比較的產業資料，故不以營收推定。`,
+                        judgment: "-", sources: companyReferences
+                    }
+                ];
+                const riskRows = [
+                    {
+                        label: "R 監管風險",
+                        explanation: `公司業務資料：${profileEvidence}。目前抓取內容只有公司簡介與年度財報欄位，沒有此公司的監管風險因子、訴訟或處分明細；請由 SEC 申報連結核對，暫不評級。`,
+                        judgment: "-", sources: companyReferences
+                    },
+                    {
+                        label: "I 通脹風險（定價能力）",
+                        explanation: recentMargins.length
+                            ? `近 ${recentMargins.length} 個可用年度毛利率：${marginHistory}。毛利率提供獲利趨勢線索，但缺少投入成本、售價與銷量拆分，無法分辨通脹轉嫁能力。`
+                            : "尚無可用年度毛利率；目前也未取得投入成本、售價與銷量拆分，無法評估通脹轉嫁能力。",
+                        judgment: "-", sources: moatSources
+                    },
+                    {
+                        label: "S 科技風險",
+                        explanation: `公司業務資料：${profileEvidence}。近年營收 ${revenueTrend}，可觀察業務變化，但目前缺少研發投入、產品生命週期、替代技術與競爭者比較，無法單靠營收趨勢衡量技術淘汰風險。`,
+                        judgment: "-", sources: companyReferences
+                    },
+                    {
+                        label: "K 關鍵人物風險",
+                        explanation: `公司業務資料：${profileEvidence}。行情與年度財報來源未提供管理團隊集中度、接班計畫或核心人才流失資訊；需核對公司年報的管理階層及治理章節，暫不評級。`,
+                        judgment: "-", sources: companyReferences
+                    }
+                ];
+                renderRows("qual-moat-body", moatRows);
+                renderRows("qual-risk-body", riskRows);
+            }
+            return;
+
+            const annual = (data.annual || []).slice().sort((a, b) => b.year.localeCompare(a.year));
+            const years = annual.slice(0, 5);
+            const metrics = data.metrics || {};
+            const valuation = data.valuation || {};
+            const latest = years[0] || {};
+            const raw = (row, key) => analysisValue(row, key);
+            const rawCell = (key, formatter = compactMoney) => (row) => ({
+                value: formatter(raw(row, key)),
+                source: row.fieldSources?.[key] || (raw(row, key) === null ? "來源未提供" : "Yahoo Finance")
+            });
+            const calcCell = (calculate, formatter = number) => (row, index) => ({
+                value: formatter(calculate(row, index)),
+                source: "由財報欄位計算",
+                calculated: true
+            });
+            const growth = (key) => calcCell((row, index) => {
+                const current = raw(row, key);
+                const prior = raw(years[index + 1], key);
+                return current === null || prior === null || prior === 0 ? null : current / prior - 1;
+            }, ratio);
+            const margin = (numerator, denominator = "totalRevenue") => calcCell((row) =>
+                safeDivide(raw(row, numerator), raw(row, denominator)), ratio);
+            const debtIncome = calcCell((row) => {
+                const debt = raw(row, "longTermDebt");
+                const income = raw(row, "netIncome");
+                return debt === null || income === null || income <= 0 ? null : debt / income;
+            }, multiple);
+            const debtEquity = calcCell((row) => safeDivide(raw(row, "totalDebt"), raw(row, "stockholdersEquity")), multiple);
+            const currentRatio = calcCell((row) => safeDivide(raw(row, "totalCurrentAssets"), raw(row, "totalCurrentLiabilities")), multiple);
+            const quickRatio = calcCell((row) => {
+                const assets = raw(row, "totalCurrentAssets");
+                const inventory = raw(row, "inventory");
+                return safeDivide(assets === null || inventory === null ? null : assets - inventory,
+                    raw(row, "totalCurrentLiabilities"));
+            }, multiple);
+            const cash = (row) => raw(row, "cashAndCashEquivalents");
+            const netDebt = calcCell((row) => {
+                const debt = raw(row, "totalDebt");
+                const cashValue = cash(row);
+                return debt === null || cashValue === null ? null : debt - cashValue;
+            });
+            const roe = calcCell((row, index) => {
+                const prior = years[index + 1];
+                const income = raw(row, "netIncome");
+                const equity = raw(row, "stockholdersEquity");
+                const priorEquity = raw(prior, "stockholdersEquity");
+                return safeDivide(income, equity === null || priorEquity === null ? null : (equity + priorEquity) / 2);
+            }, ratio);
+            const roa = calcCell((row, index) => {
+                const prior = years[index + 1];
+                const income = raw(row, "netIncome");
+                const assets = raw(row, "totalAssets");
+                const priorAssets = raw(prior, "totalAssets");
+                return safeDivide(income, assets === null || priorAssets === null ? null : (assets + priorAssets) / 2);
+            }, ratio);
+            const assetTurnover = calcCell((row, index) => {
+                const priorAssets = raw(years[index + 1], "totalAssets");
+                const assets = raw(row, "totalAssets");
+                return safeDivide(raw(row, "totalRevenue"), assets === null || priorAssets === null
+                    ? null : (assets + priorAssets) / 2);
+            });
+            const inventoryTurnover = calcCell((row, index) => {
+                const currentInventory = raw(row, "inventory");
+                const priorInventory = raw(years[index + 1], "inventory");
+                const grossProfit = raw(row, "grossProfit");
+                const revenue = raw(row, "totalRevenue");
+                const cogs = grossProfit === null || revenue === null ? null : revenue - grossProfit;
+                return safeDivide(cogs, currentInventory === null || priorInventory === null
+                    ? null : (currentInventory + priorInventory) / 2);
+            });
+            const receivablesTurnover = calcCell((row, index) => {
+                const currentReceivables = raw(row, "accountsReceivable");
+                const priorReceivables = raw(years[index + 1], "accountsReceivable");
+                return safeDivide(raw(row, "totalRevenue"), currentReceivables === null || priorReceivables === null
+                    ? null : (currentReceivables + priorReceivables) / 2);
+            });
+            const cashQuality = calcCell((row) => safeDivide(raw(row, "operatingCashFlow"), raw(row, "netIncome")), multiple);
+            const fields = [
+                ["totalRevenue", "Revenue", compactMoney], ["revenueGrowth", "Revenue Growth", null],
+                ["grossProfit", "Gross Profit", compactMoney], ["grossMargin", "Gross Margin", null],
+                ["operatingIncome", "Operating Income", compactMoney], ["operatingMargin", "Operating Margin", null],
+                ["netIncome", "Net Income", compactMoney], ["netMargin", "Net Margin", null],
+                ["dilutedEPS", "Diluted EPS", number], ["operatingCashFlow", "OCF", compactMoney],
+                ["freeCashFlow", "FCF", compactMoney], ["capitalExpenditures", "CapEx", compactMoney],
+                ["ocfNetIncome", "OCF / Net Income", null], ["investingCashFlow", "Investing Cash Flow", compactMoney],
+                ["financingCashFlow", "Financing Cash Flow", compactMoney]
+            ].map(([key, label, formatter]) => ({
+                label,
+                get: key === "revenueGrowth" ? growth("totalRevenue") :
+                    key === "grossMargin" ? margin("grossProfit") :
+                    key === "operatingMargin" ? margin("operatingIncome") :
+                    key === "netMargin" ? margin("netIncome") :
+                    key === "ocfNetIncome" ? cashQuality : rawCell(key, formatter || number)
+            }));
+            renderYearTable("qual-financial-head", "qual-financial-body", years, fields);
+            renderYearTable("qual-safety-head", "qual-safety-body", years, [
+                {label: "Total Debt", get: rawCell("totalDebt")},
+                {label: "Long-Term Debt", get: rawCell("longTermDebt")},
+                {label: "Cash", get: rawCell("cashAndCashEquivalents")},
+                {label: "Net Debt", get: netDebt},
+                {label: "D/E", get: debtEquity},
+                {label: "Current Ratio", get: currentRatio},
+                {label: "Quick Ratio", get: quickRatio},
+                {label: "Long-Term Debt / Net Income", get: debtIncome}
+            ]);
+            renderYearTable("qual-efficiency-head", "qual-efficiency-body", years, [
+                {label: "ROE", get: roe}, {label: "ROA", get: roa},
+                {label: "ROIC", get: () => ({value: "無資料", source: "缺少可驗證計算輸入"})},
+                {label: "Asset Turnover", get: assetTurnover},
+                {label: "Inventory Turnover", get: inventoryTurnover},
+                {label: "Receivables Turnover", get: receivablesTurnover}
+            ]);
+
+            const latestDebtIncome = safeDivide(raw(latest, "longTermDebt"), raw(latest, "netIncome"));
+            const currentPE = valuation.trailingPE;
+            byId("qual-name").textContent = `${data.name || data.symbol} · 質化分析`;
+            byId("qual-subtitle").textContent = `代號 ${data.symbol} · ${data.currency || "幣別未提供"} · 年報欄位依 SEC EDGAR → Yahoo Finance → 可選 FMP 補缺。`;
+            addAnalysisItems("qual-summary", [
+                {label: "Long-Term Debt / Net Income", value: multiple(latestDebtIncome), note: latest.year ? `FY ${latest.year}` : "缺少完整年度資料"},
+                {label: "FCF", value: latest.freeCashFlow == null ? "無資料" : `${data.currency || ""} ${compactMoney(latest.freeCashFlow)}`, note: latest.year ? `FY ${latest.year}` : ""},
+                {label: "Current P/E", value: multiple(currentPE), note: valuation.trailingPEDate ? `TWSE · ${valuation.trailingPEDate}` : "日期／口徑未提供"},
+                {label: "Forward P/E", value: multiple(valuation.forwardPE), note: "Yahoo Finance／可選 FMP"},
+                {label: "PEG", value: number(valuation.peg), note: "來源口徑未提供"},
+                {label: "5Y Average / Minimum P/E", value: "無資料", note: "無可驗證的公司歷史 PE 序列"},
+                {label: "Industry P/E", value: "無資料", note: "尚無可驗證同業分類與估值基準"},
+                {label: "S&P 500 P/E", value: multiple(valuation.sp500PE), note: "Multpl；更新日期未提供"},
+                {label: "Fear & Greed", value: number(data.market?.fearGreed?.score, 0), note: data.market?.fearGreed?.rating || "CNN 資料未提供"}
+            ]);
+            const latestMargins = {
+                gm: safeDivide(raw(latest, "grossProfit"), raw(latest, "totalRevenue")),
+                om: safeDivide(raw(latest, "operatingIncome"), raw(latest, "totalRevenue")),
+                nm: safeDivide(raw(latest, "netIncome"), raw(latest, "totalRevenue"))
+            };
+            const oldest = years.at(-1) || {};
+            const revenueCagr = years.length >= 2 && raw(oldest, "totalRevenue") > 0 && raw(latest, "totalRevenue") > 0
+                ? (raw(latest, "totalRevenue") / raw(oldest, "totalRevenue")) ** (1 / (years.length - 1)) - 1 : null;
+            const currentROE = safeDivide(raw(latest, "netIncome"), raw(latest, "stockholdersEquity"));
+            const currentOCFNI = safeDivide(raw(latest, "operatingCashFlow"), raw(latest, "netIncome"));
+            const currentFCF = raw(latest, "freeCashFlow");
+            addAnalysisItems("qual-quality", [
+                {label: "Profitability evidence", value: `GM ${ratio(latestMargins.gm)} · OM ${ratio(latestMargins.om)} · NM ${ratio(latestMargins.nm)}`, note: latest.year ? `FY ${latest.year}` : "來源未提供"},
+                {label: "Growth evidence", value: ratio(revenueCagr), note: years.length >= 2 ? `${years.at(-1).year}–${latest.year} Revenue CAGR` : "需至少兩個年度"},
+                {label: "Cash flow quality", value: multiple(currentOCFNI), note: `OCF / Net Income · FCF ${currentFCF == null ? "無資料" : number(currentFCF)}`},
+                {label: "Financial safety", value: multiple(metrics.debtEquity), note: `Long-Term Debt / NI ${multiple(latestDebtIncome)}`},
+                {label: "Efficiency quality", value: ratio(currentROE), note: "年末權益近似；完整 ROE 使用平均權益見效率表"},
+                {label: "Business Quality 0–10", value: "未評分", note: "尚無可重現評分公式與公司營運證據"}
+            ]);
+            const renderChecklist = (bodyId, category, subcategory, items) => {
+                const body = byId(bodyId);
+                body.replaceChildren();
+                items.forEach((item, index) => {
+                    const row = document.createElement("tr");
+                    [category, subcategory, String(index + 1), item].forEach((value) => {
+                        const cell = document.createElement("td");
+                        cell.textContent = value;
+                        row.appendChild(cell);
+                    });
+                    const explanation = document.createElement("td");
+                    explanation.textContent = "尚無可引用的公司證據；請查閱公司年報或 Investor Relations。";
+                    row.appendChild(explanation);
+                    const judgment = document.createElement("td");
+                    judgment.textContent = "- 無資料";
+                    row.appendChild(judgment);
+                    body.appendChild(row);
+                });
+            };
+            renderChecklist("qual-moat", "質化優勢分析", "護城河", [
+                "無形資產", "成本優勢", "網路效應", "高轉換成本", "有效規模"
+            ]);
+            renderChecklist("qual-risk", "質化風險分析", "RISK", [
+                "R 監管風險", "I 通膨風險（定價能力）", "S 科技風險", "K 關鍵人物風險"
+            ]);
+            addAnalysisItems("qual-valuation", [
+                {label: "P/E · Forward P/E · PEG", value: `${multiple(currentPE)} · ${multiple(valuation.forwardPE)} · ${number(valuation.peg)}`, note: "TTM／Forward 與 GAAP 口徑未完整提供"},
+                {label: "P/S · P/B · EV/EBITDA · EV/EBIT", value: "無資料", note: "目前來源回應未提供可驗證欄位"},
+                {label: "5Y P/E Average / Min / Median / Max", value: "無資料", note: "無歷史估值序列"},
+                {label: "Industry P/E", value: "無資料", note: "未確認可用的同業估值 API"},
+                {label: "S&P 500 P/E", value: multiple(valuation.sp500PE), note: "Multpl；來源日期未提供"},
+                {label: "Analyst Target / Margin of Safety", value: "無資料", note: "目標價與估值假設未驗證"},
+                {label: "CAPE", value: "無資料", note: "Multpl / MacroMicro 歷史序列未接入"},
+                {label: "Fear & Greed", value: `${number(data.market?.fearGreed?.score, 0)} · ${data.market?.fearGreed?.rating || "無分類"}`, note: "CNN；日期未提供"}
+            ]);
+            addAnalysisItems("qual-wacc", [
+                "Current WACC", "Historical WACC", "5Y Average WACC", "5Y Minimum WACC", "5Y Maximum WACC",
+                "Risk-Free Rate", "Beta", "Equity Risk Premium", "Cost of Debt", "Tax Rate", "Capital Structure",
+                "ROIC − WACC", "Revenue CAGR · Bear / Base / Bull", "EBIT Margin · Bear / Base / Bull",
+                "Tax Rate · Bear / Base / Bull", "CapEx · Bear / Base / Bull", "D&A · Bear / Base / Bull",
+                "FCF Margin · Bear / Base / Bull", "WACC · Bear / Base / Bull", "Terminal Growth · Bear / Base / Bull",
+                "Bear / Base / Bull Fair Value", "DCF 結果可靠性"
+            ].map((label) => ({label, value: "無資料", note: "尚無來源或完整可驗證輸入；不得自行捏造假設"})));
+            const thirdPartySources = [
+                ["GuruFocus GF Value", "https://www.gurufocus.com/"],
+                ["Morningstar Fair Value", "https://www.morningstar.com/stocks"],
+                ["Simply Wall St Fair Value", "https://simplywall.st/"],
+                ["Neyman AI Fair Value", "https://neyman.ai/"],
+                ["StockCalc Fair Value", "https://www.stockcalc.com/"],
+                ["FinGuider Fair Value", "https://www.finguider.com/"]
+            ];
+            addAnalysisItems("qual-fair-value", thirdPartySources.map(([label]) => ({
+                label, value: "未取得可驗證值", note: "網站頁面／登入限制，未確認穩定公開 API"
+            })));
+            const fairValueContainer = byId("qual-fair-value");
+            thirdPartySources.forEach(([label, url], index) => {
+                const link = document.createElement("a");
+                link.href = url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = "開啟來源";
+                fairValueContainer.children[index]?.append(" ", link);
+            });
+            const baseChecks = assessChecks(data).slice(0, 16);
+            addAnalysisItems("qual-score", [
+                {label: "PEACE 基本檢核", value: `${baseChecks.filter((item) => item.passed === true).length} / 16`, note: `${baseChecks.filter((item) => item.passed !== null).length} 項已判定；詳見 PEACE 分頁`},
+                ...[["Business Quality", 10], ["Moat", 15], ["Profitability", 15], ["Growth", 15],
+                    ["Cash Flow", 10], ["Financial Safety", 10], ["Efficiency", 10], ["Valuation", 10],
+                    ["Market Sentiment", 5]].map(([label, weight]) => ({
+                    label: `${label}（權重 ${weight}）`, value: "未計算", note: "範本未提供可重現評分公式"
+                })),
+                {label: "Raw Score / Valuation / Moat / Risk / ROIC-WACC Adjustment", value: "未計算", note: "依完整公式與輸入資料確認前不計分"},
+                {label: "Final Investment Score", value: "未計算", note: "不產生未經證據支持的總分"}
+            ]);
+            addAnalysisItems("qual-decision", [
+                "Bull Case", "Base Case", "Bear Case", "合理價格", "買入區間", "Margin of Safety",
+                "投資建議", "公司品質結論", "目前價格是否值得買"
+            ].map((label) => ({label, value: "未判定", note: "需由前述已驗證數據、估值與風險推導"})));
+            byId("qual-source-links").replaceChildren();
+            const sourceLinks = [
+                ["SEC EDGAR", "https://www.sec.gov/edgar/search/"],
+                ["Yahoo Finance", `https://finance.yahoo.com/quote/${encodeURIComponent(data.symbol)}/`],
+                ["Nasdaq", `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(data.symbol.toLowerCase())}`],
+                ["TWSE OpenAPI", "https://openapi.twse.com.tw/"],
+                ["StockAnalysis", `https://stockanalysis.com/stocks/${encodeURIComponent(data.symbol.toLowerCase())}/`],
+                ["Morningstar", "https://www.morningstar.com/stocks"],
+                ["GuruFocus", "https://www.gurufocus.com/"],
+                ["Stockrow", "https://stockrow.com/"], ["DeepViews", "https://www.deepviews.dev/en"],
+                ["Neyman AI", "https://neyman.ai/"], ["YCharts", "https://ycharts.com/"],
+                ["MacroMicro", "https://www.macromicro.me/"],
+                ["CNN Fear & Greed", "https://www.cnn.com/markets/fear-and-greed"],
+                ["WantGoo", "https://www.wantgoo.com/"], ["TradingView", "https://www.tradingview.com/"]
+            ];
+            sourceLinks.forEach(([label, url]) => {
+                const link = document.createElement("a");
+                link.href = url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = label;
+                byId("qual-source-links").appendChild(link);
+            });
+            const auditBody = byId("qual-audit-body");
+            auditBody.replaceChildren();
+            const auditFields = [
+                ["totalRevenue", "Revenue", data.currency], ["grossProfit", "Gross Profit", data.currency],
+                ["operatingIncome", "Operating Income", data.currency], ["netIncome", "Net Income", data.currency],
+                ["dilutedEPS", "Diluted EPS", `${data.currency || ""}/share`],
+                ["operatingCashFlow", "OCF", data.currency], ["freeCashFlow", "FCF", data.currency],
+                ["capitalExpenditures", "CapEx", data.currency], ["investingCashFlow", "Investing Cash Flow", data.currency],
+                ["financingCashFlow", "Financing Cash Flow", data.currency], ["totalAssets", "Total Assets", data.currency],
+                ["totalDebt", "Total Debt", data.currency], ["longTermDebt", "Long-Term Debt", data.currency],
+                ["cashAndCashEquivalents", "Cash", data.currency], ["totalCurrentAssets", "Current Assets", data.currency],
+                ["totalCurrentLiabilities", "Current Liabilities", data.currency], ["stockholdersEquity", "Equity", data.currency],
+                ["inventory", "Inventory", data.currency], ["accountsReceivable", "Accounts Receivable", data.currency]
+            ];
+            years.forEach((year) => auditFields.forEach(([key, label, unit]) => {
+                const value = raw(year, key);
+                const source = year.fieldSources?.[key] || "來源未提供";
+                const row = document.createElement("tr");
+                const adoptedValue = value === null ? "無資料" : `${compactMoney(value)}${unit ? ` ${unit}` : ""}`;
+                const sourceCell = document.createElement("td");
+                const url = sourceUrl(source, data.symbol);
+                if (url) {
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.target = "_blank";
+                    link.rel = "noopener noreferrer";
+                    link.textContent = source;
+                    sourceCell.appendChild(link);
+                } else {
+                    sourceCell.textContent = source;
+                }
+                [year.year ? `FY ${year.year}` : "年度未提供", label, adoptedValue,
+                    `日期未提供 · FY ${year.year || "未提供"}`, null, sourceConfidence(source),
+                    source === "SEC EDGAR" ? "官方申報值優先" :
+                        source === "Financial Modeling Prep" ? "僅補缺，不覆蓋已採用值" :
+                        source === "Yahoo Finance" ? "官方欄位未取得時作備援" : "未採用來源"]
+                    .forEach((text, index) => {
+                    if (index === 4) {
+                        row.appendChild(sourceCell);
+                        return;
+                    }
+                    const cell = document.createElement("td");
+                    cell.textContent = text;
+                    row.appendChild(cell);
+                });
+                auditBody.appendChild(row);
+            }));
+        }
+
+        function setPage(pageName) {
+            const showQualitative = pageName === "qualitative";
+            byId("peace-page").hidden = showQualitative;
+            byId("qualitative-page").hidden = !showQualitative;
+            byId("peace-tab").setAttribute("aria-current", showQualitative ? "false" : "page");
+            byId("qualitative-tab").setAttribute("aria-current", showQualitative ? "page" : "false");
+        }
+
         function render(data) {
             byId("c-name").textContent = `${data.name} (${data.symbol})`;
             byId("c-price").textContent = money(data.price, data.currency);
             byId("c-desc").textContent = data.description || "來源未提供公司簡介。";
             byId("m-sp500-pe").textContent = multiple(data.valuation.sp500PE);
             byId("m-pe").textContent = multiple(data.valuation.trailingPE);
+            byId("m-pe-date").textContent = data.valuation.trailingPEDate
+                ? `TWSE 資料日期：${data.valuation.trailingPEDate}`
+                : "目前 PE 日期／來源未提供";
             byId("m-forward-pe").textContent = multiple(data.valuation.forwardPE);
             byId("m-peg").textContent = number(data.valuation.peg);
             byId("m-market-cap").textContent = compactMoney(data.valuation.marketCap);
@@ -351,6 +1068,7 @@
             }
             renderCriteria(data);
             renderAnnual(data);
+            renderQualitative(data);
             const warnings = Object.entries(data.errors || {});
             const notices = [
                 data.providerNotice,
@@ -390,6 +1108,95 @@
             }
         }
 
+        function setTheme(theme) {
+            document.documentElement.dataset.theme = theme;
+            const isNight = theme === "dark";
+            byId("theme-toggle").textContent = isNight ? "切換至日間模式" : "切換至夜間模式";
+            byId("theme-toggle").setAttribute("aria-pressed", String(isNight));
+        }
+
+        function saveReport(format) {
+            const ticker = (byId("ticker").value.trim().toUpperCase() || "PEACE")
+                .replace(/[^A-Z0-9._-]/g, "_");
+            const isQualitative = !byId("qualitative-page").hidden;
+            const report = (isQualitative ? byId("qualitative-page") : byId("report-content")).cloneNode(true);
+            report.hidden = false;
+            const title = `PEACE-${ticker}-${isQualitative ? "質化分析" : "股票品質分析"}報告`;
+            const escapedTicker = ticker.replace(/[&<>"']/g, (character) => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+            })[character]);
+            const reportHtml = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<style>
+:root{--text-color:#18212b;--muted-color:#596675}
+body{font-family:Arial,"Microsoft JhengHei",sans-serif;color:#18212b;background:#fff;margin:28px;line-height:1.55}
+h1,h2,h3,h4{break-after:avoid}
+.grid-6,.grid-4,.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.metric-card{border:1px solid #d3d9df;padding:12px;border-radius:6px;break-inside:avoid}
+.metric-card h4{margin:0;color:#596675;font-weight:normal}
+.metric-card h2{margin:8px 0 0;font-size:20px}
+.success-box{border:1px solid #00a66a;background:#effaf5;padding:12px}
+.section-title{color:#596675}
+table{width:100%;border-collapse:collapse;text-align:right}
+th,td{padding:8px;border-bottom:1px solid #d3d9df}
+th:first-child,td:first-child{text-align:left}
+#qualitative-page{padding:20px;border:1px solid #333;background:#fff;color:#202020;font-family:"Microsoft JhengHei","PMingLiU",serif;line-height:1.55}
+#qualitative-page .qualitative-section+.qualitative-section{margin-top:24px}
+#qualitative-page .qualitative-note{margin:0 0 12px}
+#qualitative-page .qualitative-title{margin:0 0 6px;font-size:1.15rem}
+#qualitative-page .qualitative-subtitle{margin:0 0 12px;font-size:1rem}
+#qualitative-page .qualitative-sources{display:block;margin-top:6px;font-size:.8rem;overflow-wrap:anywhere}
+#qualitative-page .qualitative-sources a{color:#145c63}
+#qualitative-page .analysis-table{min-width:640px;table-layout:fixed;border:1px solid #333;background:#fff;color:#202020;text-align:left}
+#qualitative-page .analysis-table th,#qualitative-page .analysis-table td{width:33.333%;border:1px solid #444;padding:12px 14px;color:#202020;vertical-align:middle}
+#qualitative-page .analysis-table th:nth-child(1),#qualitative-page .analysis-table td:nth-child(1){width:24%}
+#qualitative-page .analysis-table th:nth-child(2),#qualitative-page .analysis-table td:nth-child(2){width:66%}
+#qualitative-page .analysis-table th:nth-child(3),#qualitative-page .analysis-table td:nth-child(3){width:10%;text-align:center;white-space:nowrap}
+#qualitative-page .analysis-table thead th{background:#ececec;color:#111;font-weight:bold;text-align:center}
+#qualitative-page .analysis-table tbody td:first-child{font-weight:bold}
+@media print{body{margin:12mm}.grid-6,.grid-4,.grid-2{break-inside:avoid}}
+</style>
+</head>
+<body>
+<h1>PEACE 股票品質分析報告</h1>
+<p>股票代號：${escapedTicker}　匯出時間：${new Date().toLocaleString("zh-TW")}</p>
+${report.outerHTML}
+</body>
+</html>`;
+            const isWord = format === "word";
+            const blob = new Blob([reportHtml], {
+                type: isWord ? "application/msword;charset=utf-8" : "text/html;charset=utf-8"
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${title}.${isWord ? "doc" : "html"}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        byId("theme-toggle").addEventListener("click", () => {
+            const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+            setTheme(nextTheme);
+            try {
+                localStorage.setItem("peace-theme", nextTheme);
+            } catch (error) {
+            }
+        });
+        try {
+            setTheme(localStorage.getItem("peace-theme") || "dark");
+        } catch (error) {
+            setTheme("dark");
+        }
+        byId("save-html").addEventListener("click", () => saveReport("html"));
+        byId("save-word").addEventListener("click", () => saveReport("word"));
+        byId("peace-tab").addEventListener("click", () => setPage("peace"));
+        byId("qualitative-tab").addEventListener("click", () => setPage("qualitative"));
         byId("search-form").addEventListener("submit", updateData);
         updateData();
     </script>

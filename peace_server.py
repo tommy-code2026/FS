@@ -53,6 +53,8 @@ ANNUAL_SERIES = {
     "annualCurrentAssets": "totalCurrentAssets",
     "annualCurrentLiabilities": "totalCurrentLiabilities",
     "annualStockholdersEquity": "stockholdersEquity",
+    "annualInventory": "inventory",
+    "annualAccountsReceivable": "accountsReceivable",
 }
 
 
@@ -302,6 +304,15 @@ class SecClient:
         "investingCashFlow": ("NetCashProvidedByUsedInInvestingActivities",),
         "financingCashFlow": ("NetCashProvidedByUsedInFinancingActivities",),
         "totalAssets": ("Assets",),
+        "cashAndCashEquivalents": (
+            "CashAndCashEquivalentsAtCarryingValue",
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+        ),
+        "inventory": ("InventoryNet",),
+        "accountsReceivable": (
+            "AccountsReceivableNetCurrent",
+            "AccountsNotesAndLoansReceivableNetCurrent",
+        ),
         "longTermDebt": ("LongTermDebtNoncurrent", "LongTermDebt"),
         "totalCurrentAssets": ("AssetsCurrent",),
         "totalCurrentLiabilities": ("LiabilitiesCurrent",),
@@ -484,6 +495,9 @@ class FMPClient:
             }),
             (balance, {
                 "totalAssets": "totalAssets",
+                "cashAndCashEquivalents": "cashAndCashEquivalents",
+                "inventory": "inventory",
+                "netReceivables": "accountsReceivable",
                 "longTermDebt": "longTermDebt",
                 "totalCurrentAssets": "totalCurrentAssets",
                 "totalCurrentLiabilities": "totalCurrentLiabilities",
@@ -767,6 +781,37 @@ def sp500_pe():
     raise RuntimeError("Multpl page did not contain a numeric PE value.")
 
 
+@lru_cache(maxsize=1)
+def twse_pe_table():
+    request = urllib.request.Request(
+        "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        rows = json.loads(response.read().decode("utf-8"))
+    return {str(row.get("Code", "")): row for row in rows if row.get("Code")}
+
+
+def twse_valuation(symbol):
+    if not symbol.endswith(".TW"):
+        return None
+    code = symbol[:-3]
+    if not re.fullmatch(r"\d{4,6}", code):
+        return None
+    row = twse_pe_table().get(code)
+    if not row:
+        return None
+    try:
+        pe = float(row.get("PEratio", ""))
+    except (TypeError, ValueError):
+        pe = None
+    roc_date = str(row.get("Date", ""))
+    pe_date = None
+    if re.fullmatch(r"\d{7}", roc_date):
+        pe_date = f"{int(roc_date[:3]) + 1911}-{roc_date[3:5]}-{roc_date[5:7]}"
+    return {"pe": pe, "date": pe_date}
+
+
 def annual_statements(summary, time_series):
     income = records(
         summary.get("incomeStatementHistory") or {},
@@ -784,7 +829,7 @@ def annual_statements(summary, time_series):
     for statement, keys in (
         (income, ("totalRevenue", "grossProfit", "operatingIncome", "netIncome", "dilutedEPS", "basicEPS", "interestExpense")),
         (cashflow, ("operatingCashFlow", "totalCashFromOperatingActivities", "freeCashFlow", "capitalExpenditures", "investingCashFlow", "totalCashflowsFromInvestingActivities", "financingCashFlow", "totalCashFromFinancingActivities")),
-        (balance, ("totalAssets", "longTermDebt", "totalCurrentAssets", "totalCurrentLiabilities", "stockholdersEquity", "totalDebt", "cashAndCashEquivalents")),
+        (balance, ("totalAssets", "longTermDebt", "totalCurrentAssets", "totalCurrentLiabilities", "stockholdersEquity", "totalDebt", "cashAndCashEquivalents", "inventory", "accountsReceivable")),
     ):
         for row in statement:
             date = row.get("endDate") or row.get("maxAge")
@@ -819,12 +864,18 @@ def annual_statements(summary, time_series):
     return sorted(years.values(), key=lambda row: row["year"], reverse=True)
 
 
-def prepare_stock(symbol, summary, quote_chart, markets, errors, time_series):
+def prepare_stock(symbol, summary, quote_chart, markets, errors, time_series, field_sources):
     price = summary.get("price") or {}
     details = summary.get("summaryDetail") or {}
     stats = summary.get("defaultKeyStatistics") or {}
     finance = summary.get("financialData") or {}
     annual = annual_statements(summary, time_series)
+    for row in annual:
+        origins = field_sources.setdefault(row["year"], {})
+        for field, value in row.items():
+            if field not in ("year", "fieldSources") and value is not None:
+                origins.setdefault(field, "Yahoo Finance")
+        row["fieldSources"] = origins
     latest = annual[0] if annual else {}
 
     actual_price = (
@@ -832,7 +883,8 @@ def prepare_stock(symbol, summary, quote_chart, markets, errors, time_series):
         or field_value(finance, "currentPrice")
         or quote_chart.get("price")
     )
-    pe = field_value(details, "trailingPE")
+    twse_pe = markets.get("twse_valuation") or {}
+    pe = twse_pe.get("pe") or field_value(details, "trailingPE")
     forward_pe = field_value(details, "forwardPE")
     peg = field_value(stats, "pegRatio")
     revenue = latest.get("totalRevenue")
@@ -902,6 +954,7 @@ def prepare_stock(symbol, summary, quote_chart, markets, errors, time_series):
         "description": field_value(summary.get("summaryProfile") or {}, "longBusinessSummary") or "",
         "valuation": {
             "trailingPE": pe,
+            "trailingPEDate": twse_pe.get("date"),
             "forwardPE": forward_pe,
             "peg": peg,
             "sp500PE": markets.get("sp500_pe"),
@@ -1003,7 +1056,34 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                 key=lambda row: row["year"],
                 reverse=True,
             )[:5]
-            sec_fields = ("totalRevenue", "netIncome", "operatingCashFlow", "totalAssets")
+            field_sources = {
+                year: {
+                    field: "Yahoo Finance"
+                    for field, value in row.items()
+                    if field != "year" and value is not None
+                }
+                for year, row in time_series.items()
+            }
+            sec_fields = (
+                "totalRevenue",
+                "grossProfit",
+                "operatingIncome",
+                "netIncome",
+                "dilutedEPS",
+                "operatingCashFlow",
+                "freeCashFlow",
+                "investingCashFlow",
+                "financingCashFlow",
+                "totalAssets",
+                "cashAndCashEquivalents",
+                "inventory",
+                "accountsReceivable",
+                "longTermDebt",
+                "totalCurrentAssets",
+                "totalCurrentLiabilities",
+                "stockholdersEquity",
+                "interestExpense",
+            )
             needs_sec = len(recent_years) < 5 or any(
                 any(row.get(field) is None for field in sec_fields)
                 for row in recent_years
@@ -1015,25 +1095,41 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                         summary["price"] = sec_summary["price"]
                     for year, values in sec_series.items():
                         target = time_series.setdefault(year, {"year": year})
+                        origins = field_sources.setdefault(year, {})
                         for field, value in values.items():
-                            target.setdefault(field, value)
+                            if field != "year" and value is not None:
+                                target[field] = value
+                                origins[field] = "SEC EDGAR"
                     sources.append("SEC EDGAR")
                 except Exception as error:
                     errors["sec_edgar"] = str(error)
 
             api_key = os.environ.get("FMP_API_KEY", "").strip()
+            recent_years = sorted(
+                time_series.values(),
+                key=lambda row: row["year"],
+                reverse=True,
+            )[:5]
+            needs_fmp = len(recent_years) < 5 or any(
+                any(row.get(field) is None for field in sec_fields)
+                for row in recent_years
+            )
             if api_key and (
                 not summary.get("price", {}).get("regularMarketPrice")
                 or not time_series
                 or stock_chart is None
+                or needs_fmp
             ):
                 try:
                     fmp_summary, fmp_series, fmp_chart = FMPClient(api_key).stock_data(symbol)
                     merge_summary_fallback(summary, fmp_summary)
                     for year, values in fmp_series.items():
                         target = time_series.setdefault(year, {"year": year})
+                        origins = field_sources.setdefault(year, {})
                         for field, value in values.items():
-                            target.setdefault(field, value)
+                            if field != "year" and value is not None and target.get(field) is None:
+                                target[field] = value
+                                origins[field] = "Financial Modeling Prep"
                     if stock_chart is None:
                         stock_chart = fmp_chart
                     sources.append("Financial Modeling Prep")
@@ -1050,7 +1146,7 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                     + (f" 詳細錯誤：{failure_details}" if failure_details else "")
                 )
 
-            with ThreadPoolExecutor(max_workers=5) as pool:
+            with ThreadPoolExecutor(max_workers=6) as pool:
                 futures = {
                     "vix": pool.submit(volatility_index, "^VIX"),
                     "vxn": pool.submit(volatility_index, "^VXN"),
@@ -1058,6 +1154,8 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                     "fear_greed": pool.submit(fear_greed),
                     "sp500_pe": pool.submit(sp500_pe),
                 }
+                if symbol.endswith(".TW"):
+                    futures["twse_valuation"] = pool.submit(twse_valuation, symbol)
                 markets = {}
                 for key, future in futures.items():
                     try:
@@ -1069,11 +1167,15 @@ class PeaceHandler(SimpleHTTPRequestHandler):
                         elif key == "semi_volatility":
                             result, provider = result
                             sources.append(f"{provider} SOXX 波動率")
+                        elif key == "twse_valuation" and result:
+                            sources.append("TWSE OpenAPI 本益比")
                         markets[key] = result
                     except Exception as error:
                         markets[key] = None
                         errors[key] = str(error)
-            data = prepare_stock(symbol, summary, stock_chart, markets, errors, time_series)
+            data = prepare_stock(
+                symbol, summary, stock_chart, markets, errors, time_series, field_sources
+            )
             data["dataSource"] = "、".join(dict.fromkeys(sources)) or "其他來源"
             data["providers"] = sources
             data["providerNotice"] = (
