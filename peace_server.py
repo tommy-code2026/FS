@@ -356,6 +356,21 @@ class SecClient:
 
     @staticmethod
     @lru_cache(maxsize=32)
+    def cached_company_facts(cik, user_agent):
+        request = urllib.request.Request(
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json",
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json",
+                "Accept-Encoding": "identity",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return payload.get("facts", {}).get("us-gaap", {})
+
+    @staticmethod
+    @lru_cache(maxsize=32)
     def cached_submissions(cik, user_agent):
         request = urllib.request.Request(
             f"https://data.sec.gov/submissions/CIK{cik:010d}.json",
@@ -437,6 +452,81 @@ class SecClient:
                     "excerpt": text[start:end],
                 })
         return evidence, f"SEC EDGAR 已抓取 {len(selected)} 份申報文件。"
+
+    @staticmethod
+    def annual_entries(unit_rows):
+        selected = {}
+        for entry in unit_rows:
+            if entry.get("form") not in ("10-K", "20-F", "40-F"):
+                continue
+            start = entry.get("start")
+            end = entry.get("end")
+            if not end:
+                continue
+            if start:
+                try:
+                    duration = (
+                        datetime.strptime(end, "%Y-%m-%d")
+                        - datetime.strptime(start, "%Y-%m-%d")
+                    ).days
+                except ValueError:
+                    continue
+                if not 300 <= duration <= 400:
+                    continue
+            year = end[:4]
+            filed = entry.get("filed", "")
+            prior = selected.get(year)
+            if prior is None or filed > prior.get("filed", ""):
+                selected[year] = entry
+        return selected
+
+    def annual_statements(self, ticker):
+        company, facts = self.get_facts(ticker)
+        years = {}
+        for output_field, tag_names in self.FACT_TAGS.items():
+            selected_entries = {}
+            for tag_name in tag_names:
+                fact = facts.get(tag_name)
+                if not fact:
+                    continue
+                units = fact.get("units") or {}
+                if output_field == "dilutedEPS":
+                    entries = next(
+                        (
+                            rows
+                            for unit_name, rows in units.items()
+                            if unit_name.replace(" ", "").casefold() == "usd/shares"
+                        ),
+                        [],
+                    )
+                else:
+                    entries = units.get("USD", [])
+                for year, entry in self.annual_entries(entries).items():
+                    previous = selected_entries.get(year)
+                    if previous is None or entry.get("filed", "") > previous.get("filed", ""):
+                        selected_entries[year] = entry
+            for year, entry in selected_entries.items():
+                years.setdefault(year, {"year": year})[output_field] = entry["val"]
+
+        for row in years.values():
+            capex = row.get("capitalExpenditures")
+            operating_cash = row.get("operatingCashFlow")
+            if operating_cash is not None and capex is not None:
+                row["freeCashFlow"] = operating_cash - abs(capex)
+        if not years:
+            raise RuntimeError(f"SEC EDGAR 沒有 {ticker} 可用的年度財報。")
+        annual = sorted(years.values(), key=lambda item: item["year"], reverse=True)
+        summary = {
+            "price": {
+                "longName": company.get("title") or ticker,
+                "currency": "USD",
+            },
+            "summaryProfile": {},
+            "summaryDetail": {},
+            "defaultKeyStatistics": {},
+            "financialData": {},
+        }
+        return summary, {row["year"]: row for row in annual}
 
 
 class _SECTextParser(HTMLParser):
