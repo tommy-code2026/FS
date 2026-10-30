@@ -4,12 +4,14 @@ import json
 import math
 import os
 import re
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import lru_cache
+from html.parser import HTMLParser
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -286,6 +288,18 @@ def sec_tickers():
 
 
 class SecClient:
+    QUALITATIVE_TERMS = {
+        "intangible": r"patent|trademark|brand|intellectual property|license|proprietary",
+        "cost": r"manufacturing cost|unit cost|economies of scale|cost advantage|supplier cost",
+        "network": r"network effect|network effects|ecosystem|active users|marketplace",
+        "switching": r"switching cost|customer retention|customer churn|migration cost|renewal rate|qualification|certification|customer contract",
+        "scale": r"barriers to entry|new entrants|market share|competitive position|competition",
+        "regulation": r"regulatory|government regulation|legal proceedings|government action",
+        "inflation": r"inflation|pricing|price increases|input costs|cost of materials",
+        "technology": r"technological change|technology risk|obsolescence|cybersecurity|research and development",
+        "key_person": r"succession|key personnel|executive officers|chief executive officer|founder",
+    }
+
     FACT_TAGS = {
         "totalRevenue": (
             "RevenueFromContractWithCustomerExcludingAssessedTax",
@@ -321,19 +335,276 @@ class SecClient:
     }
 
     def get_facts(self, ticker):
+        company = self.get_company(ticker)
+        cik = int(company["cik_str"])
+        user_agent = os.environ["SEC_USER_AGENT"].strip()
+        return company, self.cached_company_facts(cik, user_agent)
+
+    @staticmethod
+    def get_company(ticker):
         company = next(
-            (
-                item
-                for item in sec_tickers().values()
-                if str(item.get("ticker", "")).casefold() == ticker.casefold()
-            ),
+            (item for item in sec_tickers().values()
+             if str(item.get("ticker", "")).casefold() == ticker.casefold()),
             None,
         )
         if not company:
             raise RuntimeError("SEC EDGAR 未收錄此股票代號。")
+        user_agent = os.environ["SEC_USER_AGENT"].strip()
+        if not user_agent:
+            raise RuntimeError("SEC EDGAR 需要設定含聯絡 Email 的 SEC_USER_AGENT。")
+        return company
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def cached_submissions(cik, user_agent):
+        request = urllib.request.Request(
+            f"https://data.sec.gov/submissions/CIK{cik:010d}.json",
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json",
+                "Accept-Encoding": "identity",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    @staticmethod
+    @lru_cache(maxsize=8)
+    def cached_filing_text(url, user_agent):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Encoding": "identity",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            parser = _SECTextParser()
+            parser.feed(response.read().decode("utf-8", errors="replace"))
+        return " ".join(" ".join(parser.parts).split())
+
+    @classmethod
+    def qualitative_evidence(cls, ticker):
+        company = cls.get_company(ticker)
         cik = int(company["cik_str"])
         user_agent = os.environ["SEC_USER_AGENT"].strip()
-        return company, self.cached_company_facts(cik, user_agent)
+        payload = cls.cached_submissions(cik, user_agent)
+        recent = (payload.get("filings") or {}).get("recent") or {}
+        forms = recent.get("form") or []
+        filing_dates = recent.get("filingDate") or []
+        accessions = recent.get("accessionNumber") or []
+        documents = recent.get("primaryDocument") or []
+        selected = {}
+        for form, filed_at, accession, document in zip(
+            forms, filing_dates, accessions, documents
+        ):
+            if form in ("10-K", "10-K/A", "20-F", "40-F"):
+                category = "annual"
+            elif form == "10-Q":
+                category = "quarterly"
+            elif form in ("8-K", "8-K/A"):
+                category = "event"
+            elif form == "DEF 14A":
+                category = "proxy"
+            else:
+                continue
+            if category not in selected:
+                selected[category] = (form, filed_at, accession, document)
+        if not selected:
+            raise RuntimeError("SEC EDGAR 近期申報中沒有可用的年報、季報或委託書。")
+
+        evidence = {}
+        for form, filed_at, accession, document in selected.values():
+            safe_document = os.path.basename(document)
+            accession_path = accession.replace("-", "")
+            filing_url = (
+                f"https://www.sec.gov/Archives/edgar/data/{cik}/"
+                f"{accession_path}/{urllib.parse.quote(safe_document)}"
+            )
+            text = cls.cached_filing_text(filing_url, user_agent)
+            for topic, terms in cls.QUALITATIVE_TERMS.items():
+                match = re.search(terms, text, re.IGNORECASE)
+                if not match:
+                    continue
+                start = max(0, match.start() - 150)
+                end = min(len(text), match.end() + 210)
+                evidence.setdefault(topic, []).append({
+                    "source": "SEC EDGAR",
+                    "title": f"{company.get('title') or ticker} {form}",
+                    "filedAt": filed_at,
+                    "url": filing_url,
+                    "excerpt": text[start:end],
+                })
+        return evidence, f"SEC EDGAR 已抓取 {len(selected)} 份申報文件。"
+
+
+class _SECTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self.hidden_depth += 1
+        elif tag in ("br", "div", "p", "tr", "td", "th", "li") and not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self.hidden_depth:
+            self.hidden_depth -= 1
+        elif tag in ("div", "p", "tr", "td", "th", "li") and not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+
+class MopsClient:
+    BASE_URL = "https://mopsov.twse.com.tw/mops/web/ajax_t05st01"
+    TOPIC_TERMS = {
+        "intangible": r"專利|商標|智慧財產|研發成果|技術授權|著作權|品牌",
+        "cost": r"毛利率|營業利益|資本支出|產能利用率|單位成本|營運成本|製造成本|成本優勢",
+        "network": r"網路效應|平台|生態系|活躍用戶|開發者|多邊市場",
+        "switching": r"轉換成本|遷移成本|客戶留存|續約率|認證|主要契約|設計導入|停機風險|第二供應來源",
+        "scale": r"產能|資本支出|市場占有率|市場份額|競爭者|進入障礙|擴產",
+        "regulation": r"裁罰|行政處分|違規|訴訟|法律程序|主管機關調查|反壟斷|司法調查|罰鍰|出口管制|監管",
+        "inflation": r"通膨|通脹|售價|調價|價格調整|原物料價格|毛利率|漲價|降價",
+        "technology": r"研發|專利|替代技術|技術風險|產品世代|技術淘汰|資安|技術演進",
+        "key_person": r"董事長異動|董事異動|總經理異動|經理人異動|接班|經營團隊|高階主管|持股轉讓|持股質押|股權質押",
+    }
+
+    @staticmethod
+    def _ssl_context():
+        context = ssl.create_default_context()
+        strict_flag = getattr(ssl, "VERIFY_X509_STRICT", 0)
+        if strict_flag:
+            context.verify_flags &= ~strict_flag
+        return context
+
+    @staticmethod
+    def _request(url, data=None):
+        body = urllib.parse.urlencode(data).encode("ascii") if data else None
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Referer": "https://mopsov.twse.com.tw/mops/web/t05st01",
+                "Accept": "text/html,application/xhtml+xml",
+                **({"Content-Type": "application/x-www-form-urlencoded"} if body else {}),
+            },
+        )
+        with urllib.request.urlopen(
+            request, timeout=20, context=MopsClient._ssl_context()
+        ) as response:
+            content = response.read()
+            charset = response.headers.get_content_charset() or "utf-8"
+        return content.decode(charset, errors="replace")
+
+    @staticmethod
+    def _plain_text(markup):
+        parser = _SECTextParser()
+        parser.feed(markup)
+        return " ".join(" ".join(parser.parts).split())
+
+    @classmethod
+    def qualitative_evidence(cls, symbol):
+        match = re.fullmatch(r"(\d{4,6})\.(TW|TWO)", symbol, re.IGNORECASE)
+        if not match:
+            raise RuntimeError("MOPS 僅支援 .TW 或 .TWO 台股代號。")
+        code = match.group(1)
+        market_type = "otc" if match.group(2).upper() == "TWO" else "sii"
+        current_roc_year = datetime.now().year - 1911
+        records = []
+        listing_url = ""
+        for roc_year in (current_roc_year, current_roc_year - 1):
+            query = urllib.parse.urlencode({
+                "encodeURIComponent": "1",
+                "step": "1",
+                "firstin": "1",
+                "off": "1",
+                "co_id": code,
+                "year": str(roc_year),
+            })
+            listing_url = f"{cls.BASE_URL}?{query}"
+            markup = cls._request(listing_url)
+            for row in re.findall(r"<tr\b[^>]*>.*?</tr>", markup, re.IGNORECASE | re.DOTALL):
+                onclick = re.search(r"onclick=(['\"])(.*?)\1", row, re.IGNORECASE | re.DOTALL)
+                title_match = re.search(r"<pre\b[^>]*>(.*?)</pre>", row, re.IGNORECASE | re.DOTALL)
+                if not onclick or not title_match:
+                    continue
+                fields = {}
+                for field in ("seq_no", "spoke_time", "spoke_date", "co_id", "TYPEK"):
+                    value = re.search(
+                        rf"{field}\.value=['\"]([^'\"]*)['\"]",
+                        onclick.group(2), re.IGNORECASE,
+                    )
+                    if value:
+                        fields[field] = value.group(1)
+                title = cls._plain_text(title_match.group(1))
+                if all(key in fields for key in ("seq_no", "spoke_time", "spoke_date", "co_id")):
+                    records.append((roc_year, fields, title))
+            if records:
+                break
+        if not records:
+            raise RuntimeError("MOPS 未回傳此公司可用的重大訊息。")
+
+        topic_pattern = re.compile(
+            "|".join(f"(?:{terms})" for terms in cls.TOPIC_TERMS.values()),
+            re.IGNORECASE,
+        )
+        relevant_records = [record for record in records if topic_pattern.search(record[2])]
+        records = (relevant_records or records)[:8]
+        evidence = {}
+        fetched = 0
+        for roc_year, fields, title in records:
+            detail_params = {
+                "encodeURIComponent": "1",
+                "firstin": "true",
+                "TYPEK": fields.get("TYPEK", market_type),
+                "year": str(roc_year),
+                "month": "all",
+                "co_id": fields["co_id"],
+                "spoke_date": fields["spoke_date"],
+                "spoke_time": fields["spoke_time"],
+                "seq_no": fields["seq_no"],
+                "step": "2",
+                "off": "1",
+            }
+            detail_url = f"{cls.BASE_URL}?{urllib.parse.urlencode(detail_params)}"
+            try:
+                detail = cls._plain_text(cls._request(detail_url))
+            except Exception:
+                continue
+            fetched += 1
+            roc_date = fields["spoke_date"]
+            filed_at = ""
+            if re.fullmatch(r"\d{8}", roc_date):
+                filed_at = f"{roc_date[:4]}-{roc_date[4:6]}-{roc_date[6:8]}"
+            searchable = f"{title} {detail}"
+            for topic, terms in cls.TOPIC_TERMS.items():
+                topic_match = re.search(terms, searchable, re.IGNORECASE)
+                if topic_match:
+                    detail_match = re.search(terms, detail, re.IGNORECASE)
+                    if detail_match:
+                        start = max(0, detail_match.start() - 150)
+                        end = min(len(detail), detail_match.end() + 210)
+                        excerpt = detail[start:end]
+                    else:
+                        excerpt = title or detail[:360]
+                    evidence.setdefault(topic, []).append({
+                        "source": "MOPS 公開資訊觀測站",
+                        "title": title or "重大訊息",
+                        "filedAt": filed_at,
+                        "url": detail_url,
+                        "excerpt": excerpt,
+                    })
+        if not fetched:
+            raise RuntimeError("MOPS 公告清單有資料，但未能取得單筆公告內容。")
+        return evidence, f"MOPS 已抓取 {fetched} 則重大訊息原文；申報內容由公司提供，需交叉驗證。"
 
     @staticmethod
     @lru_cache(maxsize=32)
@@ -1015,12 +1286,15 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             errors = {}
             sources = []
             summary = {}
+            description_source = ""
             time_series = {}
             stock_chart = None
             yahoo = YahooClient()
             try:
                 summary = yahoo.quote_summary(symbol)
                 sources.append("Yahoo Finance")
+                if field_value(summary.get("summaryProfile") or {}, "longBusinessSummary"):
+                    description_source = "Yahoo Finance"
             except Exception as error:
                 errors["yahoo_quote"] = str(error)
             try:
@@ -1122,6 +1396,11 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             ):
                 try:
                     fmp_summary, fmp_series, fmp_chart = FMPClient(api_key).stock_data(symbol)
+                    fmp_description = field_value(
+                        fmp_summary.get("summaryProfile") or {}, "longBusinessSummary"
+                    )
+                    if not description_source and fmp_description:
+                        description_source = "Financial Modeling Prep"
                     merge_summary_fallback(summary, fmp_summary)
                     for year, values in fmp_series.items():
                         target = time_series.setdefault(year, {"year": year})
@@ -1176,6 +1455,26 @@ class PeaceHandler(SimpleHTTPRequestHandler):
             data = prepare_stock(
                 symbol, summary, stock_chart, markets, errors, time_series, field_sources
             )
+            qualitative_evidence = {}
+            if symbol.upper().endswith((".TW", ".TWO")):
+                try:
+                    qualitative_evidence, qualitative_status = (
+                        MopsClient.qualitative_evidence(symbol)
+                    )
+                except Exception as error:
+                    qualitative_status = f"MOPS 質化來源不可用：{error}"
+                    errors["mops_qualitative"] = str(error)
+            else:
+                try:
+                    qualitative_evidence, qualitative_status = (
+                        SecClient.qualitative_evidence(symbol)
+                    )
+                except Exception as error:
+                    qualitative_status = f"SEC 質化來源不可用：{error}"
+                    errors["sec_qualitative"] = str(error)
+            data["qualitativeEvidence"] = qualitative_evidence
+            data["qualitativeSourceStatus"] = qualitative_status
+            data["descriptionSource"] = description_source
             data["dataSource"] = "、".join(dict.fromkeys(sources)) or "其他來源"
             data["providers"] = sources
             data["providerNotice"] = (

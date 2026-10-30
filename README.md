@@ -19,3 +19,7 @@ GitHub Pages 提供 PEACE 網頁，Render 執行股票資料 API。使用者開�
 行情先使用 Yahoo Finance，再以 Nasdaq 備援；若仍缺資料且已設定 `FMP_API_KEY`，再嘗試 FMP。年度財報先取得 Yahoo Finance 資料，再以 SEC EDGAR 官方年報欄位覆蓋可用值；SEC 缺欄時由 Yahoo 保留，若已設定 FMP key 則再補缺。SEC 僅涵蓋其收錄公司，並需設定 `SEC_USER_AGENT`。台股每日 PE 優先使用 TWSE OpenAPI，Yahoo Finance 為備援；TWSE 季度財報不會未經核對直接加總成年度資料。Nasdaq 目前只作行情備援，不作年度財報來源。
 
 VIX/VXN 來源為 CBOE，Fear & Greed 使用 CNN，S&P 500 PE 使用 Multpl。StockAnalysis、Stockrow、GuruFocus、Morningstar、MacroMicro 等網站未確認有穩定且允許程式化存取的免費 API；頁面可瀏覽不代表可用作自動資料備援。質化分析會保留來源連結並將未取得資料明確標示，不以不穩定網頁解析或付費內容冒充已抓取數據。不同來源的覆蓋市場與欄位不相同，缺少欄位會保留為無資料。後端只允許設定的 GitHub Pages 網域跨網域讀取 API。免費方案可能在閒置後休眠，重新使用時第一次載入會比較慢。
+
+質化頁目前會依市場抓取可直接核對的官方原文：美股從 SEC EDGAR 的近期 10-K、10-Q、8-K、DEF 14A 申報文件擷取主題片段；台股從 MOPS 重大訊息擷取公告原文。每筆顯示來源、文件名稱、日期、直接網址及摘錄。SEC 仍須設定含聯絡 Email 的 `SEC_USER_AGENT`；缺少設定或來源不可用時，行情資料仍會照常回傳，質化來源狀態會說明原因。
+
+這些摘錄是關鍵字定位用的待核對證據，不代表正面或負面判定。依質化來源規則，公司自行申報內容不能單獨證明護城河；目前 USPTO/TIPO 專利、監管機關、總體物價、產業價值鏈、公司 IR 與競爭者資料尚未自動抓取，因此缺少交叉來源或同業比較時不推定為符合。

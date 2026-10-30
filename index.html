@@ -173,11 +173,11 @@
         #qualitative-page .analysis-table th:nth-child(1),
         #qualitative-page .analysis-table td:nth-child(1) { width: 24%; }
         #qualitative-page .analysis-table th:nth-child(2),
-        #qualitative-page .analysis-table td:nth-child(2) { width: 66%; }
+        #qualitative-page .analysis-table td:nth-child(2) { width: 56%; }
         #qualitative-page .analysis-table th:nth-child(3),
-        #qualitative-page .analysis-table td:nth-child(3) { width: 10%; }
+        #qualitative-page .analysis-table td:nth-child(3) { width: 20%; }
         #qualitative-page .analysis-table th:nth-child(3),
-        #qualitative-page .analysis-table td:nth-child(3) { text-align: center; white-space: nowrap; }
+        #qualitative-page .analysis-table td:nth-child(3) { text-align: center; }
         #qualitative-page .analysis-table thead th {
             background: #ececec;
             color: #111;
@@ -294,6 +294,8 @@
             <div class="qualitative-section">
                 <p class="qualitative-company" id="qualitative-company"></p>
                 <p class="qualitative-note">質化分析 (<span class="status-v">V符合</span>, <span class="status-o">O部分</span>, <span class="status-x">X不符</span>, <span class="status-none">—無資料</span>)</p>
+                <p class="qualitative-subtitle">官方原文摘錄僅作待核對證據；缺少交叉來源、同業比較或產業資料時不推定為符合。</p>
+                <p class="qualitative-subtitle" id="qualitative-source-status" role="status"></p>
                 <h2 class="qualitative-title">優勢分析＊至少 1 項，越多越高</h2>
                 <h3 class="qualitative-subtitle">護城河</h3>
                 <div class="table-scroll">
@@ -585,10 +587,6 @@
                 const encodedSymbol = encodeURIComponent(symbol);
                 const yahooUrl = `https://finance.yahoo.com/quote/${encodedSymbol}/`;
                 const secUrl = `https://www.sec.gov/edgar/search/#/q=${encodedSymbol}`;
-                const referenceLinks = [
-                    {label: "Yahoo Finance", url: yahooUrl},
-                    {label: "SEC EDGAR（申報檢索）", url: secUrl}
-                ];
                 const sourceUrlFor = (source) => {
                     if (source.startsWith("SEC EDGAR")) return secUrl;
                     if (source.startsWith("Yahoo Finance")) return yahooUrl;
@@ -596,11 +594,14 @@
                         return `https://www.nasdaq.com/market-activity/stocks/${encodedSymbol.toLowerCase()}`;
                     if (source.startsWith("TWSE")) return "https://openapi.twse.com.tw/";
                     if (source.startsWith("Financial Modeling Prep"))
-                        return "https://site.financialmodelingprep.com/";
+                        return `https://financialmodelingprep.com/profile/${encodedSymbol}`;
                     return "";
                 };
                 const annual = (data?.annual || []).slice().sort((left, right) =>
                     String(right.year || "").localeCompare(String(left.year || "")));
+                const evidenceByTopic = data?.qualitativeEvidence || {};
+                byId("qualitative-source-status").textContent = data?.qualitativeSourceStatus
+                    || "尚未取得官方文件內容；本頁不以來源入口連結代替證據。";
                 const grossMargins = annual.map((row) => ({
                     year: row.year,
                     value: safeDivide(analysisValue(row, "grossProfit"), analysisValue(row, "totalRevenue")),
@@ -619,6 +620,8 @@
                 const platformSignal = /platform|ecosystem|marketplace|network|community|connect|share|developer|user base/i.test(description);
                 const workflowSignal = /enterprise|cloud|workspace|subscription|infrastructure|workflow|developer|software-as-a-service|saas/i.test(description);
                 const revenueHistory = annual.slice(0, 5).reverse().filter((row) => row.totalRevenue != null);
+                const revenueSources = [...new Set(revenueHistory
+                    .map((row) => row.fieldSources?.totalRevenue).filter(Boolean))];
                 const revenueTrend = revenueHistory.length >= 2
                     ? `FY ${revenueHistory[0].year} ${compactMoney(revenueHistory[0].totalRevenue)} 至 FY ${revenueHistory.at(-1).year} ${compactMoney(revenueHistory.at(-1).totalRevenue)}`
                     : revenueHistory.length === 1
@@ -627,20 +630,23 @@
                 const sourceLinks = (sources) => [...new Set(sources)]
                     .map((source) => ({label: source, url: sourceUrlFor(source)}))
                     .filter((source) => source.url);
+                const evidenceFor = (topics) => [...new Map(topics
+                    .flatMap((topic) => evidenceByTopic[topic] || [])
+                    .filter((item) => item?.url)
+                    .map((item) => [item.url, item])).values()];
+                const profileSources = data?.descriptionSource ? [data.descriptionSource] : [];
                 const renderRows = (bodyId, items) => {
                     const body = byId(bodyId);
                     body.replaceChildren();
-                    items.forEach((item) => {
-                        const row = document.createElement("tr");
-                        const label = document.createElement("td");
-                        label.textContent = item.label;
-                        const explanation = document.createElement("td");
-                        explanation.appendChild(document.createTextNode(item.explanation));
-                        if (item.sources.length) {
-                            const links = document.createElement("small");
-                            links.className = "qualitative-sources";
-                            links.append("來源／核對：");
-                            item.sources.forEach((source, index) => {
+                    const appendSources = (target, label, sources) => {
+                        const links = document.createElement("small");
+                        links.className = "qualitative-sources";
+                        links.append(`${label}：`);
+                        const availableSources = sourceLinks(sources);
+                        if (!availableSources.length) {
+                            links.append("未取得可驗證資料");
+                        } else {
+                            availableSources.forEach((source, index) => {
                                 if (index) links.append(" · ");
                                 const link = document.createElement("a");
                                 link.href = source.url;
@@ -649,8 +655,51 @@
                                 link.textContent = source.label;
                                 links.appendChild(link);
                             });
-                            explanation.appendChild(links);
                         }
+                        target.appendChild(links);
+                    };
+                    const appendEvidence = (target, topics) => {
+                        const documents = evidenceFor(topics).slice(0, 4);
+                        const details = document.createElement("details");
+                        details.className = "qualitative-sources";
+                        const summary = document.createElement("summary");
+                        summary.textContent = documents.length
+                            ? `官方文件原文摘錄 (${documents.length})`
+                            : "未抓取到本項目的官方文件摘錄";
+                        details.appendChild(summary);
+                        documents.forEach((item) => {
+                            const source = document.createElement("p");
+                            const link = document.createElement("a");
+                            try {
+                                const url = new URL(item.url);
+                                if (url.protocol === "https:" &&
+                                    (url.hostname === "sec.gov" || url.hostname.endsWith(".sec.gov") ||
+                                     url.hostname === "mopsov.twse.com.tw")) {
+                                    link.href = url.href;
+                                }
+                            } catch { }
+                            link.textContent = `${item.source || "官方來源"} · ${item.title || "文件"}`;
+                            if (link.href) {
+                                link.target = "_blank";
+                                link.rel = "noopener noreferrer";
+                            }
+                            source.appendChild(link);
+                            if (item.filedAt) source.append(` · ${item.filedAt}`);
+                            const excerpt = document.createElement("span");
+                            excerpt.textContent = item.excerpt || "未取得可顯示的原文片段。";
+                            source.append("：", excerpt);
+                            details.appendChild(source);
+                        });
+                        target.appendChild(details);
+                    };
+                    items.forEach((item) => {
+                        const row = document.createElement("tr");
+                        const label = document.createElement("td");
+                        label.textContent = item.label;
+                        const explanation = document.createElement("td");
+                        explanation.appendChild(document.createTextNode(item.explanation));
+                        appendSources(explanation, "說明來源", item.explanationSources);
+                        appendEvidence(explanation, item.evidenceKeys || []);
                         const judgment = document.createElement("td");
                         const judgmentText = item.judgment.trim().replace(/^-/, "—").slice(0, 1);
                         const mark = document.createElement("span");
@@ -659,18 +708,20 @@
                             : judgmentText.startsWith("X") ? "status-x" : "status-none");
                         mark.textContent = judgmentText;
                         judgment.appendChild(mark);
+                        appendSources(judgment, "判斷來源", item.judgmentSources);
                         judgment.setAttribute("aria-label", `判斷：${judgmentText}`);
                         row.append(label, explanation, judgment);
                         body.appendChild(row);
                     });
                 };
-                const companyReferences = sourceLinks(["Yahoo Finance", "SEC EDGAR（申報檢索）"]);
-                const moatSources = sourceLinks(marginSources.length ? marginSources : ["Yahoo Finance"]);
+                const moatSources = [...new Set(marginSources)];
                 const moatRows = [
                     {
                         label: "無形資產",
                         explanation: `公司業務資料：${profileEvidence}。近年營收 ${revenueTrend}；但公司簡介與財報欄位未提供品牌溢價、專利／授權收入或無形資產回報，營收規模不能單獨證明無形資產護城河。`,
-                        judgment: "-", sources: companyReferences
+                        judgment: "-", explanationSources: [...profileSources, ...revenueSources],
+                        judgmentSources: [...profileSources, ...revenueSources],
+                        evidenceKeys: ["intangible"]
                     },
                     {
                         label: "成本優勢",
@@ -678,50 +729,61 @@
                             ? `近 ${recentMargins.length} 個可用年度毛利率：${marginHistory}。持續正毛利僅是營運效率的間接線索；缺少同業單位成本及價格比較，故僅列部分支持。`
                             : `可用毛利率年度${marginHistory ? `：${marginHistory}` : "不足"}；目前少於三個年度，且缺少同業單位成本比較，無法判定成本優勢。`,
                         judgment: costJudgment,
-                        sources: moatSources
+                        explanationSources: moatSources, judgmentSources: moatSources,
+                        evidenceKeys: ["cost"]
                     },
                     {
                         label: "網路效應",
                         explanation: platformSignal
                             ? `公司簡介呈現平台／社群／連結或生態系線索：${profileEvidence}。這是網路效應的初步定性線索；目前未取得活躍用戶、互動密度、留存率或多邊交易資料，不能據此確認效應強度。`
                             : `公司業務資料：${profileEvidence}。目前未取得活躍用戶、互動密度、留存率或多邊交易資料，無法確認網路效應。`,
-                        judgment: platformSignal ? "O" : "-", sources: companyReferences
+                        judgment: platformSignal ? "O" : "-",
+                        explanationSources: profileSources, judgmentSources: profileSources,
+                        evidenceKeys: ["network"]
                     },
                     {
                         label: "高轉換成本",
                         explanation: workflowSignal
                             ? `公司簡介顯示企業、雲端、訂閱或工作流程型服務線索：${profileEvidence}。此類整合可能增加更換成本，但目前沒有客戶留存、流失、續約或實際遷移成本數據，故只作部分支持。`
                             : `公司業務資料：${profileEvidence}。目前未取得客戶留存、流失、續約或實際遷移成本數據，無法確認更換障礙。`,
-                        judgment: workflowSignal ? "O" : "-", sources: companyReferences
+                        judgment: workflowSignal ? "O" : "-",
+                        explanationSources: profileSources, judgmentSources: profileSources,
+                        evidenceKeys: ["switching"]
                     },
                     {
                         label: "有效規模",
                         explanation: `近年營收 ${revenueTrend}。營收可反映公司規模，但有效規模還需市場容量、份額、競爭者數量及進入障礙；目前沒有可比較的產業資料，故不以營收推定。`,
-                        judgment: "-", sources: companyReferences
+                        judgment: "-", explanationSources: revenueSources,
+                        judgmentSources: revenueSources, evidenceKeys: ["scale"]
                     }
                 ];
                 const riskRows = [
                     {
                         label: "R 監管風險",
-                        explanation: `公司業務資料：${profileEvidence}。目前抓取內容只有公司簡介與年度財報欄位，沒有此公司的監管風險因子、訴訟或處分明細；請由 SEC 申報連結核對，暫不評級。`,
-                        judgment: "-", sources: companyReferences
+                        explanation: `公司業務資料：${profileEvidence}。本次未抓取此公司的監管風險因子、訴訟或處分明細，需另查法定申報才能評級。`,
+                        judgment: "-", explanationSources: profileSources,
+                        judgmentSources: [], evidenceKeys: ["regulation"]
                     },
                     {
                         label: "I 通脹風險（定價能力）",
                         explanation: recentMargins.length
                             ? `近 ${recentMargins.length} 個可用年度毛利率：${marginHistory}。毛利率提供獲利趨勢線索，但缺少投入成本、售價與銷量拆分，無法分辨通脹轉嫁能力。`
                             : "尚無可用年度毛利率；目前也未取得投入成本、售價與銷量拆分，無法評估通脹轉嫁能力。",
-                        judgment: "-", sources: moatSources
+                        judgment: "-", explanationSources: moatSources,
+                        judgmentSources: moatSources, evidenceKeys: ["inflation"]
                     },
                     {
                         label: "S 科技風險",
                         explanation: `公司業務資料：${profileEvidence}。近年營收 ${revenueTrend}，可觀察業務變化，但目前缺少研發投入、產品生命週期、替代技術與競爭者比較，無法單靠營收趨勢衡量技術淘汰風險。`,
-                        judgment: "-", sources: companyReferences
+                        judgment: "-",
+                        explanationSources: [...profileSources, ...revenueSources],
+                        judgmentSources: [], evidenceKeys: ["technology"]
                     },
                     {
                         label: "K 關鍵人物風險",
-                        explanation: `公司業務資料：${profileEvidence}。行情與年度財報來源未提供管理團隊集中度、接班計畫或核心人才流失資訊；需核對公司年報的管理階層及治理章節，暫不評級。`,
-                        judgment: "-", sources: companyReferences
+                        explanation: `公司業務資料：${profileEvidence}。本次來源未提供管理團隊集中度、接班計畫或核心人才流失資訊，需查公司治理文件才能評級。`,
+                        judgment: "-", explanationSources: profileSources,
+                        judgmentSources: [], evidenceKeys: ["key_person"]
                     }
                 ];
                 renderRows("qual-moat-body", moatRows);
@@ -1153,8 +1215,8 @@ th:first-child,td:first-child{text-align:left}
 #qualitative-page .analysis-table{min-width:640px;table-layout:fixed;border:1px solid #333;background:#fff;color:#202020;text-align:left}
 #qualitative-page .analysis-table th,#qualitative-page .analysis-table td{width:33.333%;border:1px solid #444;padding:12px 14px;color:#202020;vertical-align:middle}
 #qualitative-page .analysis-table th:nth-child(1),#qualitative-page .analysis-table td:nth-child(1){width:24%}
-#qualitative-page .analysis-table th:nth-child(2),#qualitative-page .analysis-table td:nth-child(2){width:66%}
-#qualitative-page .analysis-table th:nth-child(3),#qualitative-page .analysis-table td:nth-child(3){width:10%;text-align:center;white-space:nowrap}
+#qualitative-page .analysis-table th:nth-child(2),#qualitative-page .analysis-table td:nth-child(2){width:56%}
+#qualitative-page .analysis-table th:nth-child(3),#qualitative-page .analysis-table td:nth-child(3){width:20%;text-align:center}
 #qualitative-page .analysis-table thead th{background:#ececec;color:#111;font-weight:bold;text-align:center}
 #qualitative-page .analysis-table tbody td:first-child{font-weight:bold}
 @media print{body{margin:12mm}.grid-6,.grid-4,.grid-2{break-inside:avoid}}
